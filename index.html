@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
-<meta charset="UTF-8">   
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1a1a2e">
@@ -68,6 +68,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 .date-input{border:1.5px solid #e0e0e0;border-radius:8px;padding:7px 9px;font-size:13px;outline:none;width:140px;cursor:pointer;-webkit-appearance:none;}
 .date-input:focus{border-color:#1a1a2e;}
 .btn-today{background:#eef2ff;color:#1a1a2e;border:none;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-right:4px;}
+.date-cell{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .freq-badge{font-size:11px;color:#888;background:#f5f5f5;padding:3px 8px;border-radius:8px;white-space:nowrap;}
 .next-badge{display:inline-block;font-size:12px;font-weight:700;}
 .badge-days{font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;margin-right:4px;}
@@ -142,6 +143,9 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
   tbody td{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;font-size:13px;border:none;}
   tbody td:before{content:attr(data-label);font-size:11px;color:#888;font-weight:700;margin-left:.5rem;white-space:nowrap;flex-shrink:0;}
   .date-input{max-width:130px;}
+  .date-cell{flex:1;flex-direction:column;align-items:stretch;gap:8px;width:100%;}
+  .date-cell .date-input{max-width:100%;width:100%;}
+  .date-cell .btn-today{margin-right:0;width:100%;padding:9px;}
   .summary-bar{grid-template-columns:repeat(3,1fr);}
 }
 </style>
@@ -541,8 +545,10 @@ window.renderEmployeeTable=async function(){
       '<td data-label="שם הכשירות" style="font-weight:600;">'+row.name+'</td>'+
       '<td data-label="תדירות"><span class="freq-badge">כל '+row.freq+' ימים</span></td>'+
       '<td data-label="ביצוע אחרון">'+
+        '<div class="date-cell">'+
         '<input type="date" class="date-input" value="'+lastDisplay+'" onchange="onDateChange(\''+row.id+'\',this.value)">'+
-        '<button class="btn-today" onclick="setToday(\''+row.id+'\')">בוצע היום</button></td>'+
+        '<button class="btn-today" onclick="setToday(\''+row.id+'\')">בוצע היום</button>'+
+        '</div></td>'+
       '<td data-label="ביצוע הבא">'+nextDisplay+'</td>'+
       '<td data-label="סטטוס"><div class="status-cell"><div class="status-dot status-'+row.status+'"></div>'+
         '<span class="badge-days '+row.status+'">'+row.label+'</span></div></td>';
