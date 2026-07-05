@@ -400,7 +400,7 @@ function formatDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+'/'
 
 function computeStatus(lastDate,freq){
   if(!lastDate){
-    return {status:'red',nextDate:null,daysLeft:null,label:'טרם בוצע מעולם'};
+    return {status:'red',nextDate:null,daysLeft:null,label:'טרם בוצע לראשונה'};
   }
   const next=addDaysStr(lastDate,freq);
   const daysLeft=daysBetween(todayStr(),next);
@@ -409,6 +409,14 @@ function computeStatus(lastDate,freq){
   else if(daysLeft<=5){status='orange';label='נותרו '+daysLeft+' ימים';}
   else{status='green';label='בתוקף — נותרו '+daysLeft+' ימים';}
   return {status,nextDate:next,daysLeft,label};
+}
+
+function sortByUrgency(rows){
+  return rows.slice().sort((a,b)=>{
+    const ak = a.nextDate ? daysBetween(todayStr(),a.nextDate) : -Infinity;
+    const bk = b.nextDate ? daysBetween(todayStr(),b.nextDate) : -Infinity;
+    return ak-bk;
+  });
 }
 
 async function loadEmpQualData(empId){
@@ -535,7 +543,7 @@ async function enterEmployee(){
 
 window.renderEmployeeTable=async function(){
   document.getElementById('emp-table-title').textContent='הכשירויות של '+currentUser.name;
-  const rows=await loadEmpQualData(currentUser.id);
+  const rows=sortByUrgency(await loadEmpQualData(currentUser.id));
   const tbody=document.getElementById('emp-table-body');
   tbody.innerHTML='';
   rows.forEach((row,i)=>{
@@ -813,7 +821,7 @@ window.renderMasterView=async function(){
 };
 
 window.showDetail=async function(empId,empName){
-  const rows=await loadEmpQualData(empId);
+  const rows=sortByUrgency(await loadEmpQualData(empId));
   document.getElementById('detail-title').textContent='פרטי '+empName;
   const tbody=document.getElementById('detail-body');
   tbody.innerHTML='';
