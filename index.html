@@ -67,8 +67,14 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 .status-green{background:#38a169;}.status-orange{background:#e6a817;}.status-red{background:#e53e3e;}
 .date-input{border:1.5px solid #e0e0e0;border-radius:8px;padding:7px 9px;font-size:13px;outline:none;width:140px;cursor:pointer;-webkit-appearance:none;}
 .date-input:focus{border-color:#1a1a2e;}
-.btn-today{background:#eef2ff;color:#1a1a2e;border:none;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-right:4px;}
+.btn-today{background:#eef2ff;color:#1a1a2e;border:none;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-right:4px;margin-top:6px;}
 .date-cell{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.date-picker-manual{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;}
+.dsel{padding:6px 4px;border:1.5px solid #e0e0e0;border-radius:6px;font-size:12px;outline:none;background:white;-webkit-appearance:none;cursor:pointer;}
+.dsel.day-sel{width:54px;}
+.dsel.month-sel{width:64px;}
+.dsel.year-sel{width:66px;}
+.btn-save-date{background:#1a1a2e;color:white;border:none;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .freq-badge{font-size:11px;color:#888;background:#f5f5f5;padding:3px 8px;border-radius:8px;white-space:nowrap;}
 .next-badge{display:inline-block;font-size:12px;font-weight:700;}
 .badge-days{font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;margin-right:4px;}
@@ -412,6 +418,52 @@ function daysBetween(fromStr,toStr){
 }
 function formatDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+'/'+m+'/'+y;}
 
+// ===== MANUAL DATE PICKER (day/month/year selects) =====
+const HEBREW_MONTHS_SHORT=['ינו','פבר','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ'];
+function parseDateParts(dateStr){
+  if(!dateStr) return {d:'',m:'',y:''};
+  const[y,m,d]=dateStr.split('-');
+  return {d:parseInt(d,10),m:parseInt(m,10),y:parseInt(y,10)};
+}
+function buildDaySelect(id,selectedDay){
+  let html='<select class="dsel day-sel" id="'+id+'"><option value="">יום</option>';
+  for(let d=1;d<=31;d++){ html+='<option value="'+d+'"'+(selectedDay===d?' selected':'')+'>'+d+'</option>'; }
+  html+='</select>';
+  return html;
+}
+function buildMonthSelect(id,selectedMonth){
+  let html='<select class="dsel month-sel" id="'+id+'"><option value="">חודש</option>';
+  HEBREW_MONTHS_SHORT.forEach((name,i)=>{
+    const m=i+1;
+    html+='<option value="'+m+'"'+(selectedMonth===m?' selected':'')+'>'+name+'</option>';
+  });
+  html+='</select>';
+  return html;
+}
+function buildYearSelect(id,selectedYear){
+  const nowY=new Date().getFullYear();
+  let html='<select class="dsel year-sel" id="'+id+'"><option value="">שנה</option>';
+  for(let y=nowY;y>=nowY-4;y--){ html+='<option value="'+y+'"'+(selectedYear===y?' selected':'')+'>'+y+'</option>'; }
+  html+='</select>';
+  return html;
+}
+function buildManualDatePicker(prefix,lastDate,onSaveCallStr){
+  const parts=parseDateParts(lastDate);
+  return '<div class="date-picker-manual">'+
+    buildDaySelect(prefix+'-day',parts.d)+
+    buildMonthSelect(prefix+'-month',parts.m)+
+    buildYearSelect(prefix+'-year',parts.y)+
+    '<button class="btn-save-date" onclick="'+onSaveCallStr+'">שמור</button>'+
+    '</div>';
+}
+function readManualDateParts(prefix){
+  const d=document.getElementById(prefix+'-day').value;
+  const m=document.getElementById(prefix+'-month').value;
+  const y=document.getElementById(prefix+'-year').value;
+  if(!d||!m||!y) return null;
+  return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+
 function computeStatus(lastDate,freq){
   if(!lastDate){
     return {status:'red',nextDate:null,daysLeft:null,label:'טרם בוצע לראשונה'};
@@ -539,16 +591,15 @@ window.renderEmployeeTable=async function(){
     const tr=document.createElement('tr');
     tr.className='row-'+row.status;
     const nextDisplay=row.nextDate?formatDate(row.nextDate):'—';
-    const lastDisplay=row.lastDate||'';
+    const pickerHtml=buildManualDatePicker('emp-'+row.id,row.lastDate,"saveManualDateEmployee('"+row.id+"')");
     tr.innerHTML=
       '<td data-label="#" style="color:#888;font-size:13px;">'+(i+1)+'</td>'+
       '<td data-label="שם הכשירות" style="font-weight:600;">'+row.name+'</td>'+
       '<td data-label="תדירות"><span class="freq-badge">כל '+row.freq+' ימים</span></td>'+
       '<td data-label="ביצוע אחרון">'+
-        '<div class="date-cell">'+
-        '<input type="date" class="date-input" value="'+lastDisplay+'" onchange="onDateChange(\''+row.id+'\',this.value)">'+
+        pickerHtml+
         '<button class="btn-today" onclick="setToday(\''+row.id+'\')">בוצע היום</button>'+
-        '</div></td>'+
+        '</td>'+
       '<td data-label="ביצוע הבא">'+nextDisplay+'</td>'+
       '<td data-label="סטטוס"><div class="status-cell"><div class="status-dot status-'+row.status+'"></div>'+
         '<span class="badge-days '+row.status+'">'+row.label+'</span></div></td>';
@@ -577,6 +628,11 @@ window.onDateChange=async function(qualId,val){
 };
 window.setToday=async function(qualId){
   await window.onDateChange(qualId,todayStr());
+};
+window.saveManualDateEmployee=async function(qualId){
+  const dateStr=readManualDateParts('emp-'+qualId);
+  if(!dateStr){ alert('יש לבחור יום, חודש ושנה לפני השמירה'); return; }
+  await window.onDateChange(qualId,dateStr);
 };
 
 // ===== MASTER =====
@@ -849,11 +905,13 @@ window.showDetail=async function(empId,empName){
     const tr=document.createElement('tr');
     tr.className='row-'+row.status;
     const nextDisplay=row.nextDate?formatDate(row.nextDate):'—';
+    const mstPrefix='mst-'+empId+'-'+row.id;
+    const pickerHtml=buildManualDatePicker(mstPrefix,row.lastDate,"saveManualDateMaster('"+empId+"','"+row.id+"')");
     tr.innerHTML=
       '<td style="color:#888;font-size:12px;">'+(i+1)+'</td>'+
       '<td style="font-weight:600;font-size:13px;">'+row.name+'</td>'+
       '<td><span class="freq-badge">כל '+row.freq+' ימים</span></td>'+
-      '<td><input type="date" class="date-input" style="width:130px;" value="'+row.lastDate+'" onchange="onMasterDateChange(\''+empId+'\',\''+row.id+'\',this.value)"></td>'+
+      '<td>'+pickerHtml+'</td>'+
       '<td style="font-size:12px;">'+nextDisplay+'</td>'+
       '<td><div class="status-cell"><div class="status-dot status-'+row.status+'"></div><span class="badge-days '+row.status+'">'+row.label+'</span></div></td>';
     tbody.appendChild(tr);
@@ -861,6 +919,11 @@ window.showDetail=async function(empId,empName){
   document.getElementById('detail-modal').classList.add('open');
   document.getElementById('detail-modal').dataset.empId=empId;
   document.getElementById('detail-modal').dataset.empName=empName;
+};
+window.saveManualDateMaster=async function(empId,qualId){
+  const dateStr=readManualDateParts('mst-'+empId+'-'+qualId);
+  if(!dateStr){ alert('יש לבחור יום, חודש ושנה לפני השמירה'); return; }
+  await window.onMasterDateChange(empId,qualId,dateStr);
 };
 window.onMasterDateChange=async function(empId,qualId,val){
   showLoading(true);
