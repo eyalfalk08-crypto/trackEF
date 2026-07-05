@@ -907,13 +907,12 @@ window.showDetail=async function(empId,empName){
     const tr=document.createElement('tr');
     tr.className='row-'+row.status;
     const nextDisplay=row.nextDate?formatDate(row.nextDate):'—';
-    const mstPrefix='mst-'+empId+'-'+row.id;
-    const pickerHtml=buildManualDatePicker(mstPrefix,row.lastDate,"saveManualDateMaster('"+empId+"','"+row.id+"')");
+    const lastDisplay=row.lastDate?formatDate(row.lastDate):'—';
     tr.innerHTML=
       '<td style="color:#888;font-size:12px;">'+(i+1)+'</td>'+
       '<td style="font-weight:600;font-size:13px;">'+row.name+'</td>'+
       '<td><span class="freq-badge">כל '+row.freq+' ימים</span></td>'+
-      '<td>'+pickerHtml+'</td>'+
+      '<td style="font-size:12px;">'+lastDisplay+'</td>'+
       '<td style="font-size:12px;">'+nextDisplay+'</td>'+
       '<td><div class="status-cell"><div class="status-dot status-'+row.status+'"></div><span class="badge-days '+row.status+'">'+row.label+'</span></div></td>';
     tbody.appendChild(tr);
@@ -921,18 +920,6 @@ window.showDetail=async function(empId,empName){
   document.getElementById('detail-modal').classList.add('open');
   document.getElementById('detail-modal').dataset.empId=empId;
   document.getElementById('detail-modal').dataset.empName=empName;
-};
-window.saveManualDateMaster=async function(empId,qualId){
-  const dateStr=readManualDateParts('mst-'+empId+'-'+qualId);
-  if(!dateStr){ alert('יש לבחור יום, חודש ושנה לפני השמירה'); return; }
-  await window.onMasterDateChange(empId,qualId,dateStr);
-};
-window.onMasterDateChange=async function(empId,qualId,val){
-  showLoading(true);
-  await db.ref(dataKey(empId)+'/'+qualId).update({lastDate:val||''});
-  showLoading(false);
-  await window.showDetail(empId,document.getElementById('detail-modal').dataset.empName);
-  await renderMasterView();
 };
 window.closeDetail=function(){document.getElementById('detail-modal').classList.remove('open');};
 
