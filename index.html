@@ -421,7 +421,10 @@ function formatDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+'/'
 // ===== MANUAL DATE PICKER (day/month/year selects) =====
 const HEBREW_MONTHS_SHORT=['ינו','פבר','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ'];
 function parseDateParts(dateStr){
-  if(!dateStr) return {d:'',m:'',y:''};
+  if(!dateStr){
+    const now=new Date();
+    return {d:'',m:now.getMonth()+1,y:now.getFullYear()};
+  }
   const[y,m,d]=dateStr.split('-');
   return {d:parseInt(d,10),m:parseInt(m,10),y:parseInt(y,10)};
 }
@@ -441,9 +444,8 @@ function buildMonthSelect(id,selectedMonth){
   return html;
 }
 function buildYearSelect(id,selectedYear){
-  const nowY=new Date().getFullYear();
   let html='<select class="dsel year-sel" id="'+id+'"><option value="">שנה</option>';
-  for(let y=nowY;y>=nowY-4;y--){ html+='<option value="'+y+'"'+(selectedYear===y?' selected':'')+'>'+y+'</option>'; }
+  for(let y=2026;y<=2030;y++){ html+='<option value="'+y+'"'+(selectedYear===y?' selected':'')+'>'+y+'</option>'; }
   html+='</select>';
   return html;
 }
