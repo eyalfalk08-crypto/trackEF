@@ -1,0 +1,2035 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#4c1d95">
+<title>מערכת כשירויות עובדים</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#4c1d95;min-height:100vh;direction:rtl;-webkit-font-smoothing:antialiased;}
+#loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.88);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;}
+.spinner{width:40px;height:40px;border:4px solid #eee;border-top-color:#4c1d95;border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:#666;font-weight:600;}
+#firebase-error{position:fixed;inset:0;background:white;z-index:998;display:none;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;gap:1rem;}
+#firebase-error h2{font-size:20px;color:#e53e3e;}
+#firebase-error p{font-size:14px;color:#666;max-width:460px;line-height:1.7;}
+#firebase-error code{background:#f5f5f5;padding:2px 8px;border-radius:4px;font-size:13px;}
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#4c1d95 0%,#5b21b6 50%,#6d28d9 100%);padding:1rem;}
+.login-card{background:white;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.login-logo{text-align:center;margin-bottom:2rem;}
+.login-logo .icon{width:64px;height:64px;background:#4c1d95;border-radius:16px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem;}
+.login-logo .icon svg{width:32px;height:32px;fill:white;}
+.login-logo h1{font-size:22px;font-weight:700;color:#4c1d95;}
+.login-logo p{font-size:13px;color:#888;margin-top:4px;}
+.form-group{margin-bottom:1.2rem;}
+.form-group label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:6px;}
+.form-group select,.form-group input{width:100%;padding:12px 14px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;transition:border .2s;background:white;direction:rtl;-webkit-appearance:none;}
+.form-group select:focus,.form-group input:focus{border-color:#4c1d95;}
+.btn-login{width:100%;padding:14px;background:#4c1d95;color:white;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:.5rem;}
+.btn-login:active{background:#3b0764;}
+.error-msg{color:#e53e3e;font-size:13px;text-align:center;margin-top:8px;min-height:20px;}
+#app{display:none;min-height:100vh;}
+.header{background:#4c1d95;color:white;padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.header-title{font-size:16px;font-weight:700;flex:1;}
+.header-user{font-size:12px;color:#aaa;margin-left:.5rem;}
+.btn-logout{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:white;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap;}
+#employee-view{padding:1rem;max-width:960px;margin:0 auto;}
+.alert-banner{border-radius:12px;padding:.9rem 1.1rem;margin-bottom:1rem;font-size:13px;font-weight:600;display:none;align-items:center;gap:8px;}
+.alert-banner.show{display:flex;}
+.alert-banner.warn{background:#fffbeb;color:#7d5d00;border:1px solid #f6d860;}
+.alert-banner.danger{background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;}
+.summary-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;margin-bottom:1rem;}
+.sum-card{background:white;border-radius:12px;padding:.9rem 1rem;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.sum-card .n{font-size:22px;font-weight:800;}
+.sum-card .l{font-size:11px;color:#888;font-weight:700;margin-top:2px;}
+.sum-green .n{color:#38a169;}.sum-orange .n{color:#e6a817;}.sum-red .n{color:#e53e3e;}
+.table-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.table-card-header{padding:1rem 1.2rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;}
+.table-card-header h2{font-size:15px;font-weight:700;}
+.table-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead th{background:#f8f9fa;padding:10px 12px;text-align:right;font-size:11px;font-weight:700;color:#666;border-bottom:1px solid #eee;white-space:nowrap;}
+tbody tr{border-bottom:1px solid #f5f5f5;}
+tbody tr:last-child{border-bottom:none;}
+tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
+.row-green{background:#f0fff4;}
+.row-orange{background:#fffbeb;}
+.row-red{background:#fff5f5;}
+.status-cell{display:flex;align-items:center;gap:6px;}
+.status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.status-green{background:#38a169;}.status-orange{background:#e6a817;}.status-red{background:#e53e3e;}
+.date-input{border:1.5px solid #e0e0e0;border-radius:8px;padding:7px 9px;font-size:13px;outline:none;width:140px;cursor:pointer;-webkit-appearance:none;}
+.date-input:focus{border-color:#4c1d95;}
+.btn-today{background:#f3e8ff;color:#4c1d95;border:none;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;margin-right:4px;margin-top:6px;}
+.date-cell{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.date-picker-manual{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:2px;}
+.dsel{padding:6px 4px;border:1.5px solid #e0e0e0;border-radius:6px;font-size:12px;outline:none;background:white;-webkit-appearance:none;cursor:pointer;}
+.dsel.day-sel{width:54px;}
+.dsel.month-sel{width:64px;}
+.dsel.year-sel{width:66px;}
+.dsel.type-sel{width:74px;font-weight:700;}
+.type-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+.type-label{font-size:11px;color:#888;font-weight:700;white-space:nowrap;}
+.type-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;background:#f3e8ff;color:#4c1d95;white-space:nowrap;}
+.btn-save-date{background:#4c1d95;color:white;border:none;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.assign-list{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow-y:auto;border:1.5px solid #eee;border-radius:10px;padding:.6rem;margin-bottom:.8rem;}
+.assign-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 8px;border-radius:6px;cursor:pointer;}
+.assign-row:hover{background:#f8f9fa;}
+.assign-row input[type=checkbox]{width:18px;height:18px;accent-color:#4c1d95;cursor:pointer;flex-shrink:0;}
+.hist-box{display:none;margin-top:6px;background:#f8f9fa;border:1px solid #eee;border-radius:8px;padding:8px 10px;font-size:11px;color:#444;max-width:220px;}
+.hist-box.open{display:block;}
+.hist-box ul{margin:0;padding-right:16px;}
+.hist-box li{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.hist-del-btn{background:#fee2e2;color:#991b1b;border:none;width:18px;height:18px;border-radius:5px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0;}
+.hist-actions{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+.hist-restore-btn{background:#dcfce7;color:#166534;border:none;padding:2px 7px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;white-space:nowrap;}
+.row-manager{background:#f3f4f6;}
+.status-manager{background:#9ca3af;}
+.badge-days.manager{background:#e5e7eb;color:#374151;}
+.hist-box li{margin-bottom:2px;}
+.freq-badge{font-size:11px;color:#888;background:#f5f5f5;padding:3px 8px;border-radius:8px;white-space:nowrap;}
+.next-badge{display:inline-block;font-size:12px;font-weight:700;}
+.badge-days{font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;margin-right:4px;}
+.badge-days.green{background:#dcfce7;color:#166534;}
+.badge-days.orange{background:#fef3c7;color:#92400e;}
+.badge-days.red{background:#fee2e2;color:#991b1b;}
+.badge-days.expired{background:#ff1a1a;color:#ffffff;font-weight:800;}
+.row-expired{background:#ffd6d6;}
+.status-expired{background:#ff1a1a;animation:pulseRedDot 1.5s infinite;}
+@keyframes pulseRedDot{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,26,26,.55);}
+  50%{box-shadow:0 0 0 6px rgba(255,26,26,0);}
+}
+#master-view{padding:1rem;max-width:1200px;margin:0 auto;}
+.master-tabs{display:flex;gap:6px;margin-bottom:1.2rem;overflow-x:auto;padding-bottom:2px;}
+.master-tab{padding:9px 16px;border-radius:8px;border:1.5px solid #e0e0e0;background:white;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.master-tab.active{background:#4c1d95;color:white;border-color:#4c1d95;}
+.hist-mode-btn{padding:9px 16px;border-radius:8px;border:1.5px solid #e0e0e0;background:white;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.hist-mode-btn.active{background:#4c1d95;color:white;border-color:#4c1d95;}
+.master-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem;margin-bottom:1.2rem;}
+@media(min-width:600px){.master-stats{grid-template-columns:repeat(4,1fr);}}
+.stat-card{background:white;border-radius:12px;padding:1rem 1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.stat-label{font-size:11px;color:#888;font-weight:700;}
+.stat-value{font-size:22px;font-weight:800;color:#4c1d95;margin-top:2px;}
+.stat-sub{font-size:11px;color:#aaa;margin-top:1px;}
+.stat-green .stat-value{color:#38a169;}
+.stat-orange .stat-value{color:#e6a817;}
+.stat-red .stat-value{color:#e53e3e;}
+.master-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1.2rem;}
+@media(min-width:700px){.master-grid{grid-template-columns:1fr 1fr;}}
+.chart-card{background:white;border-radius:12px;padding:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.chart-card h3{font-size:14px;font-weight:700;margin-bottom:.8rem;}
+.employees-table-card{background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1.2rem;}
+.employees-table-card h3{padding:.9rem 1.2rem;font-size:14px;font-weight:700;border-bottom:1px solid #f0f0f0;}
+.count-pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;}
+.pill-green{background:#dcfce7;color:#166534;}
+.pill-orange{background:#fef3c7;color:#92400e;}
+.pill-red{background:#fee2e2;color:#991b1b;}
+.row-unavailable{background:#ede9fe !important;}
+.unavailable-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#8b5cf6;color:white;white-space:nowrap;}
+.msg-item{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:.7rem 0;border-bottom:1px solid #f0f0f0;}
+.msg-item:last-child{border-bottom:none;}
+.msg-item.unread{background:#fffbeb;margin:0 -1.2rem;padding:.7rem 1.2rem;border-radius:8px;}
+.msg-text{font-size:13px;color:#333;line-height:1.5;}
+.msg-date{font-size:11px;color:#999;margin-top:3px;}
+.msg-dismiss{background:#f3f4f6;color:#666;border:none;width:22px;height:22px;border-radius:50%;font-size:13px;cursor:pointer;flex-shrink:0;}
+.recurring-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:#f3e8ff;color:#6b21a8;}
+.available-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#f3f4f6;color:#888;white-space:nowrap;}
+.view-btn{background:#f3e8ff;color:#4c1d95;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;}
+.view-btn:active{background:#ede9fe;}
+.panel{display:none;}
+.panel-card{background:white;border-radius:12px;padding:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:1rem;}
+.panel-card h3{font-size:16px;font-weight:700;margin-bottom:.4rem;}
+.panel-card .panel-sub{font-size:13px;color:#888;margin-bottom:1.2rem;}
+.warning-box{background:#fffbeb;border:1px solid #f6d860;border-radius:10px;padding:.9rem 1.1rem;margin-bottom:1.2rem;font-size:13px;color:#7d5d00;}
+.info-box{background:#f3e8ff;border:1px solid #ddd6fe;border-radius:10px;padding:.9rem 1.1rem;margin-bottom:1.2rem;font-size:13px;color:#4c1d95;line-height:1.6;}
+.qual-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:10px 12px;border:1.5px solid #eee;border-radius:10px;background:#fafafa;flex-wrap:wrap;}
+.qual-num{width:26px;height:26px;background:#4c1d95;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.qual-name{flex:2;min-width:140px;padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;direction:rtl;}
+.qual-name:focus{border-color:#4c1d95;}
+.qual-freq{width:90px;padding:8px 10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;direction:ltr;text-align:center;}
+.qual-freq:focus{border-color:#4c1d95;}
+.qual-label{font-size:11px;color:#999;white-space:nowrap;}
+.emp-manage-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:10px 12px;border:1.5px solid #eee;border-radius:10px;background:#fafafa;flex-wrap:wrap;}
+.emp-manage-num{width:26px;height:26px;background:#4c1d95;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+.emp-manage-name{flex:2;min-width:100px;padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;direction:rtl;}
+.emp-manage-name:focus{border-color:#4c1d95;}
+.emp-manage-pin{width:90px;padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;outline:none;direction:ltr;text-align:center;letter-spacing:2px;}
+.emp-manage-pin:focus{border-color:#4c1d95;}
+.emp-manage-label{font-size:11px;color:#999;white-space:nowrap;}
+.emp-team-select{padding:8px 10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;outline:none;background:white;min-width:110px;}
+.team-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#f3e8ff;color:#4c1d95;white-space:nowrap;}
+.team-badge.none{background:#f3f4f6;color:#888;}
+.team-filter-row{display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap;}
+.btn-del-sec{background:#fee2e2;color:#991b1b;border:none;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.btn-del-emp{background:#fee2e2;color:#991b1b;border:none;width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:14px;flex-shrink:0;}
+.btn-add-dashed{background:#f0fff4;color:#166534;border:1.5px dashed #38a169;border-radius:9px;padding:9px;width:100%;cursor:pointer;font-size:13px;font-weight:700;margin-top:.5rem;margin-bottom:.3rem;}
+.btn-primary{background:#4c1d95;color:white;border:none;padding:11px 26px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;margin-top:1rem;}
+.btn-primary:active{background:#3b0764;}
+.panel-save-msg{color:#38a169;font-size:13px;margin-top:8px;opacity:0;transition:opacity .3s;min-height:18px;}
+.panel-save-msg.show{opacity:1;}
+.pin-input-group{display:flex;flex-direction:column;gap:.8rem;max-width:340px;}
+.pin-input-group label{font-size:13px;font-weight:600;color:#555;margin-bottom:3px;display:block;}
+.pin-field{padding:10px 14px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:15px;outline:none;direction:ltr;letter-spacing:3px;text-align:center;width:100%;}
+.pin-field:focus{border-color:#4c1d95;}
+.pin-err{color:#e53e3e;font-size:12px;min-height:16px;}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:white;border-radius:16px;padding:1.5rem;width:100%;max-width:780px;max-height:88vh;overflow-y:auto;direction:rtl;}
+.modal-box h2{font-size:17px;font-weight:700;margin-bottom:1.2rem;}
+.modal-close{float:left;background:#eee;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:30px;text-align:center;}
+@media(max-width:560px){
+  thead{display:none;}
+  tbody tr{display:block;padding:.7rem .4rem;border-bottom:1px solid #eee;}
+  tbody td{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;font-size:13px;border:none;}
+  tbody td:before{content:attr(data-label);font-size:11px;color:#888;font-weight:700;margin-left:.5rem;white-space:nowrap;flex-shrink:0;}
+  .date-input{max-width:130px;}
+  .date-cell{flex:1;flex-direction:column;align-items:stretch;gap:8px;width:100%;}
+  .date-cell .date-input{max-width:100%;width:100%;}
+  .date-cell .btn-today{margin-right:0;width:100%;padding:9px;}
+  .cell-stack{display:flex;flex-direction:column;gap:6px;width:100%;}
+  .cell-stack .type-row{width:100%;}
+  .cell-stack .btn-today{width:100%;margin-right:0;padding:9px;}
+  .summary-bar{grid-template-columns:repeat(3,1fr);}
+}
+@media print{
+  body *{visibility:hidden;}
+  #history-print-area, #history-print-area *{visibility:visible;}
+  #history-print-area{position:absolute;top:0;right:0;width:100%;padding:10px;}
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay"><div class="spinner"></div><div class="loading-text">מתחבר...</div></div>
+
+<div id="firebase-error">
+  <h2>Firebase לא מוגדר</h2>
+  <p>פתח את הקובץ בעורך טקסט ומלא את פרטי ה-Firebase בחלק שמסומן <code>firebaseConfig</code>.</p>
+</div>
+
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div>
+      <h1>מערכת כשירויות עובדים</h1>
+      <p>הכנס פרטים לכניסה</p>
+    </div>
+    <div class="form-group">
+      <label>בחר עובד</label>
+      <select id="login-user"><option value="">-- בחר --</option></select>
+    </div>
+    <div class="form-group">
+      <label>קוד כניסה (4 ספרות)</label>
+      <input type="password" id="login-pin" maxlength="4" placeholder="הכנס קוד" inputmode="numeric" pattern="[0-9]*">
+    </div>
+    <button class="btn-login" onclick="doLogin()">כניסה</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="header">
+    <div class="header-title">מערכת כשירויות עובדים</div>
+    <div style="display:flex;align-items:center;gap:.4rem;">
+      <span class="header-user" id="header-user-name"></span>
+      <button class="btn-logout" onclick="doLogout()">יציאה</button>
+    </div>
+  </div>
+
+  <!-- EMPLOYEE -->
+  <div id="employee-view">
+    <div class="alert-banner danger" id="emp-alert-red"></div>
+    <div class="alert-banner warn" id="emp-alert-orange"></div>
+    <div class="table-card" id="emp-messages-card" style="display:none;margin-bottom:1rem;">
+      <div class="table-card-header"><h2>הודעות</h2></div>
+      <div id="emp-messages-list" style="padding:.4rem 1.2rem 1rem;"></div>
+    </div>
+    <div class="summary-bar">
+      <div class="sum-card sum-green"><div class="n" id="emp-sum-green">0</div><div class="l">בתוקף</div></div>
+      <div class="sum-card sum-orange"><div class="n" id="emp-sum-orange">0</div><div class="l">מתקרב לפקיעה</div></div>
+      <div class="sum-card sum-red"><div class="n" id="emp-sum-red">0</div><div class="l">פג תוקף</div></div>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header">
+        <h2 id="emp-table-title">הכשירויות שלי</h2>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>#</th><th>שם הכשירות</th><th>תדירות</th><th>ביצוע אחרון</th><th>ביצוע הבא</th><th>סטטוס</th></tr></thead>
+          <tbody id="emp-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MASTER -->
+  <div id="master-view" style="display:none;">
+    <div class="master-tabs">
+      <button class="master-tab active" onclick="showMasterTab('dashboard')">לוח בקרה</button>
+      <button class="master-tab" onclick="showMasterTab('qualifications')">ניהול כשירויות</button>
+      <button class="master-tab" onclick="showMasterTab('assignments')">שיוך כשירויות</button>
+      <button class="master-tab" onclick="showMasterTab('history')">סיכום היסטוריה</button>
+      <button class="master-tab" onclick="showMasterTab('messages')">הודעות לעובדים</button>
+      <button class="master-tab" onclick="showMasterTab('employees')">ניהול עובדים</button>
+      <button class="master-tab" onclick="showMasterTab('settings')">הגדרות מנהל</button>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard-panel">
+      <div class="team-filter-row">
+        <label style="font-weight:700;font-size:14px;">סנן לפי צוות:</label>
+        <select id="dash-team-filter" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;" onchange="renderMasterView()"></select>
+      </div>
+      <div class="master-stats">
+        <div class="stat-card"><div class="stat-label">עובדים</div><div class="stat-value" id="stat-employees">0</div><div class="stat-sub">פעילים</div></div>
+        <div class="stat-card stat-green"><div class="stat-label">בתוקף</div><div class="stat-value" id="stat-green">0</div><div class="stat-sub">כשירויות</div></div>
+        <div class="stat-card stat-orange"><div class="stat-label">מתקרב לפקיעה</div><div class="stat-value" id="stat-orange">0</div><div class="stat-sub">כשירויות</div></div>
+        <div class="stat-card stat-red"><div class="stat-label">פג תוקף</div><div class="stat-value" id="stat-red">0</div><div class="stat-sub">כשירויות</div></div>
+      </div>
+      <div class="master-grid">
+        <div class="chart-card"><h3>סטטוס כשירויות לפי עובד</h3><canvas id="barChart"></canvas></div>
+        <div class="chart-card"><h3>התפלגות כללית</h3><canvas id="pieChart"></canvas></div>
+      </div>
+      <div class="employees-table-card">
+        <h3>סיכום עובדים</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>עובד</th><th>צוות</th><th>זמינות</th><th>בתוקף</th><th>מתקרב</th><th>פג תוקף</th><th>פרטים</th></tr></thead>
+            <tbody id="master-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUALIFICATIONS -->
+    <div id="qualifications-panel" class="panel">
+      <div class="panel-card">
+        <h3>ניהול כשירויות</h3>
+        <p class="panel-sub">הוסף, מחק או שנה שם ותדירות (בימים) לכל כשירות. השינויים ישפיעו על כל העובדים.</p>
+        <div class="warning-box">מחיקת כשירות לא מוחקת נתונים היסטוריים שנשמרו עבורה.</div>
+        <div id="qual-inputs"></div>
+        <button class="btn-add-dashed" onclick="addQual()">+ הוסף כשירות</button>
+        <button class="btn-primary" onclick="saveQuals()">שמור כשירויות</button>
+        <div class="panel-save-msg" id="quals-save-msg">נשמר!</div>
+      </div>
+    </div>
+
+    <!-- ASSIGNMENTS -->
+    <div id="assignments-panel" class="panel">
+      <div class="panel-card">
+        <h3>שיוך כשירויות לעובדים</h3>
+        <p class="panel-sub">ברירת המחדל: עובד רואה את כל הכשירויות. כאן אפשר להגדיר לעובד ספציפי, או לכמה עובדים בבת אחת, אילו כשירויות בדיוק יופיעו אצלם.</p>
+        <div class="warning-box">שינוי שיוך לא מוחק שום תאריך ביצוע שכבר נשמר — הוא רק קובע אילו כשירויות מוצגות לעובד.</div>
+
+        <h3 style="font-size:13px;margin-top:1rem;margin-bottom:.5rem;">1. בחרו עובד אחד או כמה עובדים</h3>
+        <div style="margin-bottom:.5rem;display:flex;gap:8px;">
+          <button class="btn-today" onclick="selectAllAssignRows('emp-assign-chk')">בחר הכל</button>
+          <button class="btn-today" onclick="clearAllAssignRows('emp-assign-chk')">נקה בחירה</button>
+        </div>
+        <div id="assign-emp-list" class="assign-list"></div>
+
+        <h3 style="font-size:13px;margin-top:1rem;margin-bottom:.5rem;">2. בחרו אילו כשירויות יופיעו אצלם</h3>
+        <div style="margin-bottom:.5rem;display:flex;gap:8px;">
+          <button class="btn-today" onclick="selectAllAssignRows('qual-assign-chk')">בחר הכל</button>
+          <button class="btn-today" onclick="clearAllAssignRows('qual-assign-chk')">נקה בחירה</button>
+        </div>
+        <div id="assign-qual-list" class="assign-list"></div>
+
+        <button class="btn-primary" onclick="applyAssignment()">החל שיוך על העובדים שנבחרו</button>
+        <div class="panel-save-msg" id="assign-save-msg">השיוך עודכן!</div>
+      </div>
+
+      <div class="employees-table-card">
+        <h3>סיכום שיוך נוכחי</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>עובד</th><th>כשירויות משויכות</th><th>עריכה</th></tr></thead>
+            <tbody id="assign-summary-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY SUMMARY -->
+    <div id="history-panel" class="panel">
+      <div class="panel-card">
+        <h3>סיכום היסטוריה</h3>
+        <p class="panel-sub">הפיקו סיכום חודשי או שנתי של כל הפעולות שנרשמו (לכל העובדים או לעובד ספציפי), או סיכום היסטוריה מלא לעובד ספציפי — ואפשר להוריד כל סיכום כ-PDF.</p>
+
+        <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
+          <button class="hist-mode-btn active" id="hist-mode-monthly-btn" onclick="setHistoryMode('monthly')">סיכום חודשי — כל העובדים</button>
+          <button class="hist-mode-btn" id="hist-mode-yearly-btn" onclick="setHistoryMode('yearly')">סיכום שנתי</button>
+          <button class="hist-mode-btn" id="hist-mode-employee-btn" onclick="setHistoryMode('employee')">סיכום מלא לעובד ספציפי</button>
+        </div>
+
+        <div id="hist-monthly-controls" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+          <label style="font-weight:700;font-size:14px;">חודש:</label>
+          <select id="hist-month" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;"></select>
+          <label style="font-weight:700;font-size:14px;">שנה:</label>
+          <select id="hist-year" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;width:88px;"></select>
+          <label style="font-weight:700;font-size:14px;">צוות:</label>
+          <select id="hist-team-filter" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;"></select>
+        </div>
+
+        <div id="hist-yearly-controls" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+          <label style="font-weight:700;font-size:14px;">שנה:</label>
+          <select id="hist-yearly-year" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;width:88px;"></select>
+          <label style="font-weight:700;font-size:14px;">עבור:</label>
+          <select id="hist-yearly-employee-select" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;"></select>
+          <label style="font-weight:700;font-size:14px;">צוות (כשבוחרים "כל העובדים"):</label>
+          <select id="hist-yearly-team-filter" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;"></select>
+        </div>
+
+        <div id="hist-employee-controls" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+          <label style="font-weight:700;font-size:14px;">עובד:</label>
+          <select id="hist-employee-select" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;"></select>
+          <label style="font-weight:700;font-size:14px;">כשירות:</label>
+          <select id="hist-employee-qual-filter" style="padding:8px 12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:14px;background:white;"></select>
+        </div>
+
+        <button class="btn-primary" onclick="generateHistorySummary()">הצג סיכום</button>
+      </div>
+
+      <div class="panel-card" id="history-results-card" style="display:none;">
+        <div id="history-print-area">
+          <h3 id="history-summary-title">סיכום</h3>
+          <div class="chart-card" style="margin-bottom:1rem;">
+            <h3 id="history-chart-title">התפלגות עמידה בזמנים</h3>
+            <canvas id="history-chart" height="140"></canvas>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead id="history-summary-thead"></thead>
+              <tbody id="history-summary-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="downloadHistoryPdf()" style="margin-top:1rem;">הורד PDF</button>
+      </div>
+    </div>
+
+    <!-- MESSAGES -->
+    <div id="messages-panel" class="panel">
+      <div class="panel-card">
+        <h3>שליחת הודעה לעובדים</h3>
+        <p class="panel-sub">כתבו הודעה שתופיע לעובדים באפליקציה ברגע שהם נכנסים אליה.</p>
+
+        <textarea id="msg-text" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:14px;direction:rtl;resize:vertical;" placeholder="תוכן ההודעה..."></textarea>
+
+        <h3 style="font-size:13px;margin-top:1rem;margin-bottom:.5rem;">נמענים</h3>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:.5rem;cursor:pointer;">
+          <input type="checkbox" id="msg-all-emps" checked onclick="toggleMsgAllEmps()"> כל העובדים
+        </label>
+        <div id="msg-emp-list" class="assign-list" style="display:none;"></div>
+
+        <h3 style="font-size:13px;margin-top:1rem;margin-bottom:.5rem;">תזמון</h3>
+        <div style="display:flex;gap:16px;margin-bottom:.6rem;flex-wrap:wrap;font-size:13px;">
+          <label style="cursor:pointer;"><input type="radio" name="msg-schedule" value="once" checked onclick="toggleMsgRecurringFields()"> שליחה חד-פעמית (מיידית)</label>
+          <label style="cursor:pointer;"><input type="radio" name="msg-schedule" value="recurring" onclick="toggleMsgRecurringFields()"> הודעה מחזורית</label>
+        </div>
+        <div id="msg-recurring-fields" style="display:none;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:.6rem;">
+          <label style="font-weight:700;font-size:13px;">תדירות:</label>
+          <select id="msg-frequency" onchange="toggleMsgFrequencyFields()" style="padding:7px 10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;">
+            <option value="daily">כל יום</option>
+            <option value="weekly">כל שבוע</option>
+            <option value="monthly">כל חודש</option>
+          </select>
+          <span id="msg-weekly-field" style="display:none;">
+            <label style="font-weight:700;font-size:13px;">יום בשבוע:</label>
+            <select id="msg-day-of-week" style="padding:7px 10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;">
+              <option value="0">ראשון</option><option value="1">שני</option><option value="2">שלישי</option>
+              <option value="3">רביעי</option><option value="4">חמישי</option><option value="5">שישי</option><option value="6">שבת</option>
+            </select>
+          </span>
+          <span id="msg-monthly-field" style="display:none;">
+            <label style="font-weight:700;font-size:13px;">יום בחודש:</label>
+            <select id="msg-day-of-month" style="padding:7px 10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:13px;"></select>
+          </span>
+        </div>
+        <div class="warning-box" id="msg-recurring-note" style="display:none;">הודעות מחזוריות מוצגות לעובד כל פעם שהוא נכנס לאפליקציה במחזור הרלוונטי (יום/שבוע/חודש) — כאן אין מנגנון Push לטלפון סגור, אז חשוב שהעובדים יפתחו את האפליקציה כדי לראות אותן.</div>
+
+        <button class="btn-primary" onclick="sendOrScheduleMessage()">שלח / צור הודעה</button>
+        <div class="panel-save-msg" id="msg-save-msg">נשמר!</div>
+      </div>
+
+      <div class="employees-table-card">
+        <h3>הודעות פעילות</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>תוכן</th><th>נמענים</th><th>תזמון</th><th>נשלחה לאחרונה</th><th>פעולות</th></tr></thead>
+            <tbody id="messages-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMPLOYEES -->
+    <div id="employees-panel" class="panel">
+      <div class="panel-card">
+        <h3>ניהול צוותים</h3>
+        <p class="panel-sub">חלקו את העובדים לצוותים — קבעו כמה צוותים יש ואיך לקרוא לכל אחד. את השיוך של כל עובד לצוות קובעים למטה, ברשימת העובדים.</p>
+        <div id="team-inputs"></div>
+        <button class="btn-add-dashed" onclick="addTeam()">+ הוסף צוות</button>
+        <button class="btn-primary" onclick="saveTeams()">שמור צוותים</button>
+        <div class="panel-save-msg" id="teams-save-msg">נשמר!</div>
+      </div>
+      <div class="panel-card">
+        <h3>ניהול עובדים</h3>
+        <p class="panel-sub">הוסף, מחק או ערוך עובדים. אפשר גם לשייך כל עובד לצוות מהרשימה הנפתחת.</p>
+        <div class="warning-box">לאחר שמירה, העובד יצטרך להשתמש בקוד החדש.</div>
+        <div id="emp-manage-list"></div>
+        <button class="btn-add-dashed" onclick="addEmployee()">+ הוסף עובד</button>
+        <button class="btn-primary" onclick="saveEmployeeManage()">שמור שינויים</button>
+        <div class="panel-save-msg" id="emp-manage-msg">נשמר!</div>
+      </div>
+
+      <div class="panel-card">
+        <h3>זמינות עובדים</h3>
+        <p class="panel-sub">סמנו עובד כלא זמין (חופשה, מילואים, מחלה וכו') בין שני תאריכים. המערכת תצבע אותו אוטומטית בלוח הבקרה עד לתאריך הסיום, ותחזיר אותו לרגיל אחרי כן — בלי צורך לזכור לבטל ידנית.</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>עובד</th><th>סטטוס נוכחי</th><th>פעולות</th></tr></thead>
+            <tbody id="availability-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="settings-panel" class="panel">
+      <div class="panel-card">
+        <h3>שינוי סיסמת המנהל</h3>
+        <p class="panel-sub">שנה את קוד הכניסה שלך למערכת.</p>
+        <div class="pin-input-group">
+          <div>
+            <label>קוד נוכחי</label>
+            <input type="password" class="pin-field" id="master-cur-pin" maxlength="4" placeholder="····" inputmode="numeric">
+          </div>
+          <div>
+            <label>קוד חדש</label>
+            <input type="password" class="pin-field" id="master-new-pin" maxlength="4" placeholder="····" inputmode="numeric">
+          </div>
+          <div>
+            <label>אשר קוד חדש</label>
+            <input type="password" class="pin-field" id="master-new-pin2" maxlength="4" placeholder="····" inputmode="numeric">
+          </div>
+          <button class="btn-primary" onclick="saveMasterPassword()">שנה קוד</button>
+          <div class="pin-err" id="master-pin-err"></div>
+          <div class="panel-save-msg" id="master-pin-msg">הקוד עודכן בהצלחה!</div>
+        </div>
+      </div>
+      <div class="panel-card">
+        <h3>איפוס כלל הנתונים במערכת</h3>
+        <p class="panel-sub">מוחק את כל תאריכי הביצוע שנשמרו עבור כל העובדים, על כל הכשירויות. שמות הכשירויות, התדירויות ורשימת העובדים לא נמחקים — רק המילוי.</p>
+        <div class="warning-box">⚠️ הפעולה הזו משפיעה על <b>כל</b> העובדים במערכת ובלתי הפיכה! כל הכשירויות של כולם יחזרו למצב "טרם בוצע לראשונה" (אדום). אין דרך לשחזר.</div>
+        <button class="btn-primary" style="background:#e53e3e;" onclick="resetAllSystemData()">אפס את כל הנתונים במערכת</button>
+        <div class="panel-save-msg" id="reset-all-msg">האיפוס בוצע!</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeDetail()">✕</button>
+    <h2 id="detail-title">פרטי עובד</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>שם הכשירות</th><th>תדירות</th><th>ביצוע אחרון</th><th>ביצוע הבא</th><th>סטטוס</th><th>היסטוריה</th><th>איפוס</th></tr></thead>
+        <tbody id="detail-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- AVAILABILITY MODAL -->
+<div class="modal-overlay" id="availability-modal">
+  <div class="modal-box" style="max-width:440px;">
+    <button class="modal-close" onclick="closeAvailabilityModal()">✕</button>
+    <h2 id="availability-modal-title">עדכון זמינות</h2>
+    <div class="form-group">
+      <label>סיבה (חופשה, מילואים, מחלה וכו')</label>
+      <input type="text" id="avail-reason" placeholder="לדוגמה: מילואים" style="width:100%;padding:10px 12px;border:1.5px solid #e0e0e0;border-radius:9px;font-size:14px;direction:rtl;">
+    </div>
+    <div class="form-group">
+      <label>מתאריך</label>
+      <div id="avail-start-picker"></div>
+    </div>
+    <div class="form-group">
+      <label>עד תאריך</label>
+      <div id="avail-end-picker"></div>
+    </div>
+    <div class="pin-err" id="avail-err"></div>
+    <button class="btn-primary" onclick="saveAvailability()">שמור</button>
+    <button class="btn-primary" style="background:#e53e3e;margin-right:.6rem;" onclick="clearAvailability()">בטל סטטוס (סמן כזמין)</button>
+  </div>
+</div>
+
+<script>
+
+// ============================================================
+// ⬇️  פרטי Firebase (הועתקו מהמערכת הקיימת שלכם — ניתן להשאיר
+//     כדי לחסוך הקמת פרויקט נוסף, או להחליף בפרויקט נפרד משלכם)
+// ============================================================
+const firebaseConfig = {
+  apiKey:            "AIzaSyA6gxbG_AnE8UOoL6i6n8JYLCQAp_Vrwo4",
+  authDomain:        "ntrackef.firebaseapp.com",
+  databaseURL:       "https://ntrackef-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "ntrackef",
+  storageBucket:     "ntrackef.firebasestorage.app",
+  messagingSenderId: "739248451672",
+  appId:             "1:739248451672:web:484984031cf9003e9dda2d"
+};
+// ============================================================
+
+let app=null, db=null;
+
+const DEFAULT_EMPLOYEES = [
+  {id:'emp1',name:'עובד 1',pin:'0001'},{id:'emp2',name:'עובד 2',pin:'0002'},
+  {id:'emp3',name:'עובד 3',pin:'0003'},{id:'emp4',name:'עובד 4',pin:'0004'},
+  {id:'emp5',name:'עובד 5',pin:'0005'},{id:'emp6',name:'עובד 6',pin:'0006'},
+  {id:'emp7',name:'עובד 7',pin:'0007'},{id:'emp8',name:'עובד 8',pin:'0008'},
+  {id:'emp9',name:'עובד 9',pin:'0009'},{id:'emp10',name:'עובד 10',pin:'0010'},
+  {id:'emp11',name:'עובד 11',pin:'0011'},{id:'emp12',name:'עובד 12',pin:'0012'},
+  {id:'emp13',name:'עובד 13',pin:'0013'},{id:'emp14',name:'עובד 14',pin:'0014'},
+  {id:'emp15',name:'עובד 15',pin:'0015'},{id:'emp16',name:'עובד 16',pin:'0016'},
+  {id:'emp17',name:'עובד 17',pin:'0017'},{id:'emp18',name:'עובד 18',pin:'0018'},
+];
+const DEFAULT_MASTER = {pin:'9999'};
+const DEFAULT_QUALS = [
+  {id:'q1',name:'שער מגנו',freq:60},
+  {id:'q2',name:'חיפוש גופני / בידוק גופני',freq:30},
+  {id:'q3',name:'SIMFOX',freq:30},
+  {id:'q4',name:'משמרת בוקר במשרד',freq:17},
+  {id:'q5',name:'משמרת ערב במשרד',freq:30},
+  {id:'q6',name:'כיול מריחן',freq:60},
+  {id:'q7',name:'כבודה ידנית',freq:30},
+  {id:'q8',name:'שיקוף לאדום',freq:30},
+  {id:'q9',name:'עבודה במעון',freq:30},
+];
+
+let currentUser = null;
+let barChartInst=null, pieChartInst=null, historyChartInst=null;
+let masterUnsub=null;
+let cachedEmployees=null, cachedQuals=null, cachedMaster=null, cachedAssignments=null, cachedTeams=null, cachedUnavailability=null;
+let notifiedThisSession=new Set();
+
+// ===== FIREBASE HELPERS =====
+async function fbGet(path){const s=await db.ref(path).once("value");return s.exists()?s.val():null;}
+async function fbSet(path,val){await db.ref(path).set(val);}
+function fbListen(path,cb){
+  const ref=db.ref(path);
+  const listener=s=>cb(s.exists()?s.val():null);
+  ref.on("value",listener);
+  return function(){ ref.off("value",listener); };
+}
+
+function showLoading(v){document.getElementById('loading-overlay').style.display=v?'flex':'none';}
+function showFirebaseError(){
+  document.getElementById('loading-overlay').style.display='none';
+  document.getElementById('firebase-error').style.display='flex';
+}
+
+async function getEmployees(){
+  if(cachedEmployees) return cachedEmployees;
+  cachedEmployees=await fbGet('quals_config/employees')||DEFAULT_EMPLOYEES;
+  return cachedEmployees;
+}
+async function getQuals(){
+  if(cachedQuals) return cachedQuals;
+  cachedQuals=await fbGet('quals_config/qualifications')||DEFAULT_QUALS;
+  return cachedQuals;
+}
+async function getMaster(){
+  if(cachedMaster) return cachedMaster;
+  cachedMaster=await fbGet('quals_config/master')||DEFAULT_MASTER;
+  return cachedMaster;
+}
+async function getAssignments(){
+  if(cachedAssignments) return cachedAssignments;
+  cachedAssignments=await fbGet('quals_config/assignments')||{};
+  return cachedAssignments;
+}
+async function getTeams(){
+  if(cachedTeams) return cachedTeams;
+  cachedTeams=await fbGet('quals_config/teams')||[];
+  return cachedTeams;
+}
+async function getUnavailability(){
+  if(cachedUnavailability) return cachedUnavailability;
+  cachedUnavailability=await fbGet('quals_config/unavailability')||{};
+  return cachedUnavailability;
+}
+function dataKey(empId){return 'quals_data/'+empId;}
+
+// ===== DATE / STATUS HELPERS =====
+function todayStr(){return new Date().toISOString().slice(0,10);}
+function addDaysStr(dateStr,n){
+  const d=new Date(dateStr+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function daysBetween(fromStr,toStr){
+  const a=new Date(fromStr+'T00:00:00Z'), b=new Date(toStr+'T00:00:00Z');
+  return Math.round((b-a)/86400000);
+}
+function formatDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+'/'+m+'/'+y;}
+
+// ===== MANUAL DATE PICKER (day/month/year selects) =====
+// Native <input type="date"> on some phones opens a wheel pre-set to "today" and
+// can save that default before the person actually chooses a date. Explicit
+// selects force a deliberate choice for each part, so nothing gets saved by accident.
+const HEBREW_MONTHS_SHORT=['ינו','פבר','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ'];
+const HEBREW_MONTHS_FULL=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+function parseDateParts(dateStr){
+  if(!dateStr){
+    const now=new Date();
+    return {d:'',m:now.getMonth()+1,y:now.getFullYear()};
+  }
+  const[y,m,d]=dateStr.split('-');
+  return {d:parseInt(d,10),m:parseInt(m,10),y:parseInt(y,10)};
+}
+function buildDaySelect(id,selectedDay){
+  let html='<select class="dsel day-sel" id="'+id+'"><option value="">יום</option>';
+  for(let d=1;d<=31;d++){ html+='<option value="'+d+'"'+(selectedDay===d?' selected':'')+'>'+d+'</option>'; }
+  html+='</select>';
+  return html;
+}
+function buildMonthSelect(id,selectedMonth){
+  let html='<select class="dsel month-sel" id="'+id+'"><option value="">חודש</option>';
+  HEBREW_MONTHS_SHORT.forEach((name,i)=>{
+    const m=i+1;
+    html+='<option value="'+m+'"'+(selectedMonth===m?' selected':'')+'>'+name+'</option>';
+  });
+  html+='</select>';
+  return html;
+}
+function buildYearSelect(id,selectedYear,maxYear){
+  maxYear=maxYear||2030;
+  let html='<select class="dsel year-sel" id="'+id+'"><option value="">שנה</option>';
+  for(let y=2026;y<=maxYear;y++){ html+='<option value="'+y+'"'+(selectedYear===y?' selected':'')+'>'+y+'</option>'; }
+  html+='</select>';
+  return html;
+}
+function buildTypeSelect(id,selectedType){
+  const type=selectedType||'יזום';
+  return '<select class="dsel type-sel" id="'+id+'">'+
+    '<option value="יזום"'+(type==='יזום'?' selected':'')+'>יזום</option>'+
+    '<option value="תרגול"'+(type==='תרגול'?' selected':'')+'>תרגול</option>'+
+    '</select>';
+}
+function buildManualDatePicker(prefix,lastDate,onSaveCallStr,maxYear){
+  const parts=parseDateParts(lastDate);
+  return '<div class="date-picker-manual">'+
+    buildDaySelect(prefix+'-day',parts.d)+
+    buildMonthSelect(prefix+'-month',parts.m)+
+    buildYearSelect(prefix+'-year',parts.y,maxYear)+
+    '<button class="btn-save-date" onclick="'+onSaveCallStr+'">שמור</button>'+
+    '</div>';
+}
+function readManualDateParts(prefix){
+  const d=document.getElementById(prefix+'-day').value;
+  const m=document.getElementById(prefix+'-month').value;
+  const y=document.getElementById(prefix+'-year').value;
+  if(!d||!m||!y) return null;
+  return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+
+function computeStatus(lastDate,freq){
+  if(!lastDate){
+    return {status:'red',isNeverDone:true,nextDate:null,daysLeft:null,label:'טרם בוצע לראשונה'};
+  }
+  const next=addDaysStr(lastDate,freq);
+  const daysLeft=daysBetween(todayStr(),next);
+  let status, label;
+  if(daysLeft<0){status='red';label='פג תוקף לפני '+Math.abs(daysLeft)+' ימים';}
+  else if(daysLeft<=5){status='orange';label='נותרו '+daysLeft+' ימים';}
+  else{status='green';label='בתוקף — נותרו '+daysLeft+' ימים';}
+  return {status,isNeverDone:false,nextDate:next,daysLeft,label};
+}
+function displayStatusClass(row){
+  // Same underlying "red" status covers two different situations — we style them
+  // differently so an actually-expired qualification stands out more than one that
+  // was simply never performed yet.
+  return (row.status==='red' && !row.isNeverDone) ? 'expired' : row.status;
+}
+function isCurrentlyUnavailable(record){
+  if(!record||!record.startDate||!record.endDate) return false;
+  const today=todayStr();
+  return today>=record.startDate && today<=record.endDate;
+}
+
+function sortByUrgency(rows){
+  return rows.slice().sort((a,b)=>{
+    const ak = a.nextDate ? daysBetween(todayStr(),a.nextDate) : -Infinity;
+    const bk = b.nextDate ? daysBetween(todayStr(),b.nextDate) : -Infinity;
+    return ak-bk;
+  });
+}
+
+async function loadEmpQualData(empId){
+  const quals=await getQuals();
+  const assignments=await getAssignments();
+  const empAssignment=assignments[empId];
+  const applicableQuals=empAssignment?quals.filter(q=>empAssignment[q.id]):quals;
+  const saved=await fbGet(dataKey(empId))||{};
+  return applicableQuals.map(q=>{
+    const rec=saved[q.id]||{};
+    const st=computeStatus(rec.lastDate||'',q.freq);
+    const history=rec.history
+      ?Object.entries(rec.history).filter(([k,h])=>h&&h.date).map(([k,h])=>({key:k,...h})).sort((a,b)=>a.date<b.date?1:(a.date>b.date?-1:0))
+      :[];
+    return{...q,lastDate:rec.lastDate||'',lastType:rec.lastType||'',history,...st};
+  });
+}
+
+function notifyForRows(){ /* project2 אין לו התראות פוש */ }
+
+// ===== LOGIN =====
+async function buildLoginSelect(){
+  const emps=await getEmployees();
+  const sel=document.getElementById('login-user');
+  sel.innerHTML='<option value="">-- בחר --</option>';
+  emps.forEach(e=>{const o=document.createElement('option');o.value=e.id;o.textContent=e.name;sel.appendChild(o);});
+  const m=document.createElement('option');m.value='master';m.textContent='מנהל (Master)';sel.appendChild(m);
+}
+
+window.doLogin=async function(){
+  const uid=document.getElementById('login-user').value;
+  const pin=document.getElementById('login-pin').value.trim();
+  const err=document.getElementById('login-error');
+  err.textContent='';
+  if(!uid){err.textContent='יש לבחור עובד';return;}
+  if(!pin){err.textContent='יש להזין קוד';return;}
+  showLoading(true);
+  try{
+    if(uid==='master'){
+      const master=await getMaster();
+      if(pin!==(master.pin||'9999')){err.textContent='קוד שגוי';showLoading(false);return;}
+      currentUser={id:'master',name:'מנהל ראשי'};
+      await enterMaster();
+    } else {
+      const emps=await getEmployees();
+      const emp=emps.find(e=>e.id===uid);
+      if(!emp||pin!==emp.pin){err.textContent='קוד שגוי';showLoading(false);return;}
+      currentUser=emp; await enterEmployee();
+    }
+  }catch(e){err.textContent='שגיאת חיבור — בדוק אינטרנט';}
+  showLoading(false);
+};
+
+try{app=firebase.initializeApp(firebaseConfig);db=firebase.database();}catch(e){}
+
+document.addEventListener('DOMContentLoaded',function(){
+  var p=document.getElementById('login-pin');
+  if(p)p.addEventListener('keydown',function(e){if(e.key==='Enter')window.doLogin();});
+  var m=document.getElementById('detail-modal');
+  if(m)m.addEventListener('click',function(e){if(e.target===this)window.closeDetail();});
+  var am=document.getElementById('availability-modal');
+  if(am)am.addEventListener('click',function(e){if(e.target===this)window.closeAvailabilityModal();});
+});
+
+var _started=false;
+var _t=setInterval(function(){
+  if(_started||!db||!document.getElementById('login-screen')) return;
+  _started=true;
+  clearInterval(_t);
+  showLoading(true);
+  db.ref('quals_config').once('value').then(function(snap){
+    var cfg=snap.val()||{};
+    var p=Promise.resolve();
+    if(!cfg.employees) p=p.then(function(){return db.ref('quals_config/employees').set(DEFAULT_EMPLOYEES);});
+    if(!cfg.qualifications) p=p.then(function(){return db.ref('quals_config/qualifications').set(DEFAULT_QUALS);});
+    if(!cfg.master) p=p.then(function(){return db.ref('quals_config/master').set(DEFAULT_MASTER);});
+    return p;
+  }).then(function(){
+    showLoading(false);
+    return buildLoginSelect();
+  }).then(function(){
+    document.getElementById('login-screen').style.display='flex';
+  }).catch(function(e){
+    console.error('init error',e);
+    showFirebaseError();
+  });
+},200);
+
+window.doLogout=function(){
+  try{ if(masterUnsub){masterUnsub();} }catch(e){ console.error('שגיאה בניתוק מאזין:',e); }
+  masterUnsub=null;
+  cachedEmployees=null;cachedQuals=null;cachedMaster=null;cachedAssignments=null;cachedTeams=null;cachedUnavailability=null;
+  currentUser=null;
+  document.getElementById('app').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-pin').value='';
+  document.getElementById('login-error').textContent='';
+  buildLoginSelect();
+};
+
+// ===== EMPLOYEE VIEW =====
+async function enterEmployee(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('header-user-name').textContent=currentUser.name;
+  document.getElementById('employee-view').style.display='block';
+  document.getElementById('master-view').style.display='none';
+  await renderEmployeeMessages();
+  await renderEmployeeTable();
+}
+
+window.renderEmployeeTable=async function(){
+  document.getElementById('emp-table-title').textContent='הכשירויות של '+currentUser.name;
+  const rows=sortByUrgency(await loadEmpQualData(currentUser.id));
+  const tbody=document.getElementById('emp-table-body');
+  tbody.innerHTML='';
+  rows.forEach((row,i)=>{
+    const tr=document.createElement('tr');
+    const dispClass=displayStatusClass(row);
+    tr.className='row-'+dispClass;
+    const nextDisplay=row.nextDate?formatDate(row.nextDate):'—';
+    const pickerHtml=buildManualDatePicker('emp-'+row.id,row.lastDate,"saveManualDateEmployee('"+row.id+"')",new Date().getFullYear());
+    const typeSelectHtml=buildTypeSelect('type-emp-'+row.id,row.lastType);
+    const typeBadge=row.lastType?'<span class="type-badge">'+row.lastType+'</span>':'';
+    tr.innerHTML=
+      '<td data-label="#" style="color:#888;font-size:13px;">'+(i+1)+'</td>'+
+      '<td data-label="שם הכשירות" style="font-weight:600;">'+row.name+'</td>'+
+      '<td data-label="תדירות"><span class="freq-badge">כל '+row.freq+' ימים</span></td>'+
+      '<td data-label="ביצוע אחרון">'+
+        '<div class="cell-stack">'+
+        '<div class="type-row"><span class="type-label">סוג ביצוע:</span>'+typeSelectHtml+typeBadge+'</div>'+
+        pickerHtml+
+        '<button class="btn-today" onclick="setToday(\''+row.id+'\')">בוצע היום</button>'+
+        '</div></td>'+
+      '<td data-label="ביצוע הבא">'+nextDisplay+'</td>'+
+      '<td data-label="סטטוס"><div class="status-cell"><div class="status-dot status-'+dispClass+'"></div>'+
+        '<span class="badge-days '+dispClass+'">'+row.label+'</span></div></td>';
+    tbody.appendChild(tr);
+  });
+  const g=rows.filter(r=>r.status==='green').length;
+  const o=rows.filter(r=>r.status==='orange').length;
+  const r=rows.filter(r=>r.status==='red').length;
+  document.getElementById('emp-sum-green').textContent=g;
+  document.getElementById('emp-sum-orange').textContent=o;
+  document.getElementById('emp-sum-red').textContent=r;
+  const redBanner=document.getElementById('emp-alert-red');
+  const orangeBanner=document.getElementById('emp-alert-orange');
+  redBanner.classList.toggle('show',r>0);
+  redBanner.textContent=r>0?('⛔ יש לך '+r+' כשירויות שפג תוקפן — נדרש לבצע אותן מחדש בהקדם.'):'';
+  orangeBanner.classList.toggle('show',o>0);
+  orangeBanner.textContent=o>0?('⚠️ יש לך '+o+' כשירויות שעומדות לפוג תוך 5 ימים.'):'';
+  notifyForRows(rows,null);
+};
+
+window.onDateChange=async function(qualId,val){
+  showLoading(true);
+  if(val){
+    const typeSel=document.getElementById('type-emp-'+qualId);
+    const type=typeSel?typeSel.value:'יזום';
+    await db.ref(dataKey(currentUser.id)+'/'+qualId).update({lastDate:val,lastType:type});
+    await db.ref(dataKey(currentUser.id)+'/'+qualId+'/history').push({date:val,type,savedAt:Date.now()});
+  }
+  else{ await db.ref(dataKey(currentUser.id)+'/'+qualId).update({lastDate:''}); }
+  showLoading(false);
+  await window.renderEmployeeTable();
+};
+window.setToday=async function(qualId){
+  await window.onDateChange(qualId,todayStr());
+};
+window.saveManualDateEmployee=async function(qualId){
+  const dateStr=readManualDateParts('emp-'+qualId);
+  if(!dateStr){ alert('יש לבחור יום, חודש ושנה לפני השמירה'); return; }
+  if(dateStr>todayStr()){ alert('לא ניתן לבחור תאריך עתידי — רק תאריך נוכחי או קודם.'); return; }
+  await window.onDateChange(qualId,dateStr);
+};
+
+// ===== MASTER =====
+async function enterMaster(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('header-user-name').textContent='מנהל ראשי';
+  document.getElementById('employee-view').style.display='none';
+  document.getElementById('master-view').style.display='block';
+  await renderMasterView();
+  await buildQualEditor();
+  await buildAssignmentEditor();
+  await buildTeamsEditor();
+  await buildMessagesEditor();
+  await buildEmployeeManager();
+  await buildAvailabilityTable();
+  await buildHistoryControls();
+  if(masterUnsub) masterUnsub();
+  masterUnsub=fbListen('quals_data',async()=>{await renderMasterView();});
+}
+
+window.showMasterTab=function(tab){
+  const tabs=['dashboard','qualifications','assignments','history','messages','employees','settings'];
+  document.querySelectorAll('.master-tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===tab));
+  tabs.forEach(p=>document.getElementById(p+'-panel')?(document.getElementById(p+'-panel').style.display=p===tab?'block':'none'):null);
+  if(tab==='qualifications') buildQualEditor();
+  if(tab==='assignments') buildAssignmentEditor();
+  if(tab==='history') buildHistoryControls();
+  if(tab==='messages') buildMessagesEditor();
+  if(tab==='employees'){ buildTeamsEditor(); buildEmployeeManager(); buildAvailabilityTable(); }
+  if(tab==='dashboard') renderMasterView();
+};
+
+// ===== QUALIFICATIONS EDITOR =====
+let _workingQuals=[];
+async function buildQualEditor(){
+  const quals=await getQuals();
+  _workingQuals=quals.map(q=>({...q}));
+  renderQualInputs(_workingQuals);
+}
+function renderQualInputs(quals){
+  const c=document.getElementById('qual-inputs');c.innerHTML='';
+  quals.forEach((q,i)=>{
+    const div=document.createElement('div');div.className='qual-row';
+    div.innerHTML='<div class="qual-num">'+(i+1)+'</div>'+
+      '<div style="display:flex;flex-direction:column;flex:2;gap:3px;min-width:150px;">'+
+        '<span class="qual-label">שם הכשירות</span>'+
+        '<input class="qual-name" type="text" value="'+q.name+'" id="qual-name-'+i+'" placeholder="שם כשירות '+(i+1)+'"></div>'+
+      '<div style="display:flex;flex-direction:column;gap:3px;">'+
+        '<span class="qual-label">תדירות (ימים)</span>'+
+        '<input class="qual-freq" type="number" min="1" value="'+q.freq+'" id="qual-freq-'+i+'"></div>'+
+      '<button class="btn-del-sec" onclick="deleteQual('+i+')" title="מחק">×</button>';
+    c.appendChild(div);
+  });
+}
+function getCurrentQuals(){
+  const quals=[];let i=0;
+  while(document.getElementById('qual-name-'+i)){
+    const name=document.getElementById('qual-name-'+i).value.trim()||'כשירות '+(i+1);
+    const freq=parseInt(document.getElementById('qual-freq-'+i).value)||30;
+    const existingId=_workingQuals[i]?_workingQuals[i].id:('q'+Date.now()+i);
+    quals.push({id:existingId,name,freq});
+    i++;
+  }
+  return quals;
+}
+window.addQual=function(){
+  _workingQuals=getCurrentQuals();
+  _workingQuals.push({id:'q'+Date.now(),name:'כשירות '+(_workingQuals.length+1),freq:30});
+  renderQualInputs(_workingQuals);
+};
+window.deleteQual=function(idx){
+  if(_workingQuals.length<=1){alert('חייבת להיות לפחות כשירות אחת');return;}
+  if(!confirm('למחוק "'+_workingQuals[idx].name+'"?'))return;
+  _workingQuals=getCurrentQuals();
+  _workingQuals.splice(idx,1);
+  renderQualInputs(_workingQuals);
+};
+window.saveQuals=async function(){
+  const quals=getCurrentQuals();
+  showLoading(true);
+  await fbSet('quals_config/qualifications',quals);
+  cachedQuals=quals;_workingQuals=quals;
+  showLoading(false);
+  showSaveMsg('quals-save-msg');
+  await renderMasterView();
+  await buildAssignmentEditor();
+};
+
+// ===== QUALIFICATION ASSIGNMENT (which quals go to which employees) =====
+let _assignEmployeesCache=null, _assignQualsCache=null;
+async function buildAssignmentEditor(){
+  const empListEl=document.getElementById('assign-emp-list');
+  if(!empListEl) return; // panel not in DOM yet on this view
+  const emps=await getEmployees();
+  const quals=await getQuals();
+  _assignEmployeesCache=emps;_assignQualsCache=quals;
+
+  empListEl.innerHTML='';
+  emps.forEach(e=>{
+    const row=document.createElement('label');row.className='assign-row';
+    row.innerHTML='<input type="checkbox" class="emp-assign-chk" value="'+e.id+'"><span>'+e.name+'</span>';
+    empListEl.appendChild(row);
+  });
+
+  const qualListEl=document.getElementById('assign-qual-list');
+  qualListEl.innerHTML='';
+  quals.forEach(q=>{
+    const row=document.createElement('label');row.className='assign-row';
+    row.innerHTML='<input type="checkbox" class="qual-assign-chk" value="'+q.id+'"><span>'+q.name+'</span>';
+    qualListEl.appendChild(row);
+  });
+
+  await renderAssignmentSummary();
+}
+
+window.selectAllAssignRows=function(cls){
+  document.querySelectorAll('.'+cls).forEach(c=>{c.checked=true;});
+};
+window.clearAllAssignRows=function(cls){
+  document.querySelectorAll('.'+cls).forEach(c=>{c.checked=false;});
+};
+
+window.applyAssignment=async function(){
+  const empIds=Array.prototype.map.call(document.querySelectorAll('.emp-assign-chk:checked'),c=>c.value);
+  const qualIds=Array.prototype.map.call(document.querySelectorAll('.qual-assign-chk:checked'),c=>c.value);
+  if(empIds.length===0){ alert('יש לבחור לפחות עובד אחד'); return; }
+  if(qualIds.length===0){
+    if(!confirm('לא נבחרה אף כשירות — העובדים שנבחרו לא יראו שום כשירות במסך שלהם. להמשיך?')) return;
+  }
+  const qualMap={};
+  qualIds.forEach(id=>{qualMap[id]=true;});
+  const patch={};
+  empIds.forEach(empId=>{ patch[empId]=qualMap; });
+  showLoading(true);
+  await db.ref('quals_config/assignments').update(patch);
+  cachedAssignments=null;
+  showLoading(false);
+  showSaveMsg('assign-save-msg');
+  await renderAssignmentSummary();
+  await renderMasterView();
+};
+
+window.editAssignmentForEmployee=async function(empId){
+  document.querySelectorAll('.emp-assign-chk').forEach(c=>{c.checked=(c.value===empId);});
+  const assignments=await getAssignments();
+  const empAssignment=assignments[empId];
+  document.querySelectorAll('.qual-assign-chk').forEach(c=>{
+    c.checked = empAssignment ? !!empAssignment[c.value] : true;
+  });
+  const empListEl=document.getElementById('assign-emp-list');
+  if(empListEl) empListEl.scrollIntoView({behavior:'smooth',block:'start'});
+};
+
+async function renderAssignmentSummary(){
+  const tbody=document.getElementById('assign-summary-body');
+  if(!tbody) return;
+  const emps=_assignEmployeesCache||await getEmployees();
+  const quals=_assignQualsCache||await getQuals();
+  const assignments=await getAssignments();
+  tbody.innerHTML='';
+  emps.forEach(emp=>{
+    const empAssignment=assignments[emp.id];
+    const applicable=empAssignment?quals.filter(q=>empAssignment[q.id]):quals;
+    const label=empAssignment
+      ?(applicable.length+' מתוך '+quals.length+(applicable.length?' — '+applicable.map(q=>q.name).join(', '):''))
+      :'כל הכשירויות (ברירת מחדל)';
+    const tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td data-label="עובד" style="font-weight:700;">'+emp.name+'</td>'+
+      '<td data-label="כשירויות משויכות" style="font-size:12px;">'+label+'</td>'+
+      '<td data-label="עריכה"><button class="view-btn" onclick="editAssignmentForEmployee(\''+emp.id+'\')">ערוך</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+// ===== HISTORY SUMMARY (monthly for everyone, or full for one employee) =====
+let _historyMode='monthly';
+async function buildHistoryControls(){
+  const monthSel=document.getElementById('hist-month');
+  if(!monthSel) return; // panel not in DOM yet on this view
+  if(!monthSel.options.length){
+    HEBREW_MONTHS_FULL.forEach((name,i)=>{
+      const o=document.createElement('option');o.value=i+1;o.textContent=name;monthSel.appendChild(o);
+    });
+    monthSel.value=new Date().getMonth()+1;
+    monthSel.onchange=hideHistoryResults;
+  }
+  const yearSel=document.getElementById('hist-year');
+  if(!yearSel.options.length){
+    for(let y=2026;y<=2030;y++){ const o=document.createElement('option');o.value=y;o.textContent=y;yearSel.appendChild(o); }
+    yearSel.value=new Date().getFullYear();
+    yearSel.onchange=hideHistoryResults;
+  }
+  const yearlyYearSel=document.getElementById('hist-yearly-year');
+  if(!yearlyYearSel.options.length){
+    for(let y=2026;y<=2030;y++){ const o=document.createElement('option');o.value=y;o.textContent=y;yearlyYearSel.appendChild(o); }
+    yearlyYearSel.value=new Date().getFullYear();
+    yearlyYearSel.onchange=hideHistoryResults;
+  }
+  const empSel=document.getElementById('hist-employee-select');
+  const previouslySelected=empSel.value; // keep whoever was chosen before rebuilding the list
+  const emps=await getEmployees();
+  empSel.innerHTML='';
+  emps.forEach(e=>{ const o=document.createElement('option');o.value=e.id;o.textContent=e.name;empSel.appendChild(o); });
+  if(previouslySelected && emps.some(e=>e.id===previouslySelected)){ empSel.value=previouslySelected; }
+  empSel.onchange=hideHistoryResults;
+
+  const yearlyEmpSel=document.getElementById('hist-yearly-employee-select');
+  const previouslySelectedYearly=yearlyEmpSel.value;
+  yearlyEmpSel.innerHTML='';
+  const allOpt=document.createElement('option');allOpt.value='all';allOpt.textContent='כל העובדים';yearlyEmpSel.appendChild(allOpt);
+  emps.forEach(e=>{ const o=document.createElement('option');o.value=e.id;o.textContent=e.name;yearlyEmpSel.appendChild(o); });
+  if(previouslySelectedYearly && (previouslySelectedYearly==='all' || emps.some(e=>e.id===previouslySelectedYearly))){ yearlyEmpSel.value=previouslySelectedYearly; }
+  yearlyEmpSel.onchange=hideHistoryResults;
+
+  const teams=await getTeams();
+  const teamFilterSel=document.getElementById('hist-team-filter');
+  if(teamFilterSel){
+    const prevTeamFilter=teamFilterSel.value;
+    teamFilterSel.innerHTML='<option value="all">כל הצוותים</option>';
+    teams.forEach(t=>{ const o=document.createElement('option');o.value=t.id;o.textContent=t.name;teamFilterSel.appendChild(o); });
+    const noneOpt=document.createElement('option');noneOpt.value='__none__';noneOpt.textContent='ללא צוות';teamFilterSel.appendChild(noneOpt);
+    if(prevTeamFilter && (prevTeamFilter==='all'||prevTeamFilter==='__none__'||teams.some(t=>t.id===prevTeamFilter))){ teamFilterSel.value=prevTeamFilter; }
+    teamFilterSel.onchange=hideHistoryResults;
+  }
+  const yearlyTeamFilterSel=document.getElementById('hist-yearly-team-filter');
+  if(yearlyTeamFilterSel){
+    const prevYearlyTeamFilter=yearlyTeamFilterSel.value;
+    yearlyTeamFilterSel.innerHTML='<option value="all">כל הצוותים</option>';
+    teams.forEach(t=>{ const o=document.createElement('option');o.value=t.id;o.textContent=t.name;yearlyTeamFilterSel.appendChild(o); });
+    const noneOpt2=document.createElement('option');noneOpt2.value='__none__';noneOpt2.textContent='ללא צוות';yearlyTeamFilterSel.appendChild(noneOpt2);
+    if(prevYearlyTeamFilter && (prevYearlyTeamFilter==='all'||prevYearlyTeamFilter==='__none__'||teams.some(t=>t.id===prevYearlyTeamFilter))){ yearlyTeamFilterSel.value=prevYearlyTeamFilter; }
+    yearlyTeamFilterSel.onchange=hideHistoryResults;
+  }
+
+  const qualFilterSel=document.getElementById('hist-employee-qual-filter');
+  if(qualFilterSel){
+    const previouslySelectedQual=qualFilterSel.value;
+    const quals=await getQuals();
+    qualFilterSel.innerHTML='<option value="all">כל הכשירויות</option>';
+    quals.forEach(q=>{ const o=document.createElement('option');o.value=q.id;o.textContent=q.name;qualFilterSel.appendChild(o); });
+    if(previouslySelectedQual && (previouslySelectedQual==='all' || quals.some(q=>q.id===previouslySelectedQual))){ qualFilterSel.value=previouslySelectedQual; }
+    qualFilterSel.onchange=hideHistoryResults;
+  }
+}
+
+function hideHistoryResults(){
+  document.getElementById('history-results-card').style.display='none';
+  document.getElementById('history-summary-title').textContent='סיכום';
+  document.getElementById('history-summary-thead').innerHTML='';
+  document.getElementById('history-summary-body').innerHTML='';
+  if(historyChartInst){ historyChartInst.destroy(); historyChartInst=null; }
+}
+
+window.setHistoryMode=function(mode){
+  _historyMode=mode;
+  document.getElementById('hist-mode-monthly-btn').classList.toggle('active',mode==='monthly');
+  document.getElementById('hist-mode-yearly-btn').classList.toggle('active',mode==='yearly');
+  document.getElementById('hist-mode-employee-btn').classList.toggle('active',mode==='employee');
+  document.getElementById('hist-monthly-controls').style.display=mode==='monthly'?'flex':'none';
+  document.getElementById('hist-yearly-controls').style.display=mode==='yearly'?'flex':'none';
+  document.getElementById('hist-employee-controls').style.display=mode==='employee'?'flex':'none';
+  hideHistoryResults();
+};
+
+function computeHistoryTimeliness(historyArr,freq){
+  const realEntries=historyArr.filter(h=>!h.managerAction);
+  const managerEntries=historyArr.filter(h=>h.managerAction);
+  const sorted=realEntries.slice().sort((a,b)=>{
+    if(a.date<b.date) return -1;
+    if(a.date>b.date) return 1;
+    return (a.savedAt||0)-(b.savedAt||0);
+  });
+  const annotatedReal=sorted.map((h,i)=>{
+    if(i===0){ return {...h,tStatus:'green',tLabel:'ביצוע ראשון'}; }
+    const prevDate=sorted[i-1].date;
+    const deadline=addDaysStr(prevDate,freq);
+    const daysLeft=daysBetween(h.date,deadline);
+    let tStatus,tLabel;
+    if(daysLeft<0){ tStatus='red'; tLabel='באיחור ('+Math.abs(daysLeft)+' ימים)'; }
+    else if(daysLeft<=5){ tStatus='orange'; tLabel='קרוב לתאריך היעד'; }
+    else{ tStatus='green'; tLabel='בזמן'; }
+    return {...h,tStatus,tLabel};
+  });
+  const annotatedManager=managerEntries.map(h=>({
+    ...h,
+    tStatus:'manager',
+    tLabel:'מנהל: '+h.actionLabel+(h.reason?' — סיבה: '+h.reason:'')
+  }));
+  return [...annotatedReal,...annotatedManager];
+}
+
+window.generateHistorySummary=async function(){
+  document.getElementById('history-results-card').style.display='block';
+  document.getElementById('history-chart').style.height='140px';
+  const quals=await getQuals();
+  const assignments=await getAssignments();
+  const allData=await fbGet('quals_data')||{};
+  const teams=await getTeams();
+  const teamNameById={};
+  teams.forEach(t=>{ teamNameById[t.id]=t.name; });
+  const thead=document.getElementById('history-summary-thead');
+  const tbody=document.getElementById('history-summary-body');
+  const titleEl=document.getElementById('history-summary-title');
+  const chartTitleEl=document.getElementById('history-chart-title');
+  let rows=[];
+
+  if(_historyMode==='monthly'){
+    const month=parseInt(document.getElementById('hist-month').value);
+    const year=parseInt(document.getElementById('hist-year').value);
+    const teamFilterVal=document.getElementById('hist-team-filter')?document.getElementById('hist-team-filter').value:'all';
+    let emps=await getEmployees();
+    if(teamFilterVal==='__none__'){ emps=emps.filter(e=>!e.team); }
+    else if(teamFilterVal!=='all'){ emps=emps.filter(e=>e.team===teamFilterVal); }
+    emps.forEach(emp=>{
+      const empAssignment=assignments[emp.id];
+      const applicableQuals=empAssignment?quals.filter(q=>empAssignment[q.id]):quals;
+      const saved=allData[emp.id]||{};
+      const teamName=emp.team?(teamNameById[emp.team]||'ללא צוות'):'ללא צוות';
+      applicableQuals.forEach(q=>{
+        const rec=saved[q.id]||{};
+        const histRaw=rec.history?Object.values(rec.history).filter(h=>h&&h.date):[];
+        const annotated=computeHistoryTimeliness(histRaw,q.freq);
+        annotated.forEach(h=>{
+          const parts=h.date.split('-');
+          if(parseInt(parts[0])===year && parseInt(parts[1])===month){
+            rows.push({emp:emp.name,team:teamName,qual:q.name,date:h.date,type:h.type||'',tStatus:h.tStatus,tLabel:h.tLabel});
+          }
+        });
+      });
+    });
+    rows.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+    const teamSuffix=teamFilterVal==='all'?'':(teamFilterVal==='__none__'?' — ללא צוות':' — '+(teamNameById[teamFilterVal]||''));
+    titleEl.textContent='סיכום חודשי — '+HEBREW_MONTHS_FULL[month-1]+' '+year+teamSuffix;
+    thead.innerHTML='<tr><th>עובד</th><th>צוות</th><th>כשירות</th><th>תאריך</th><th>סוג</th><th>עמידה בזמנים</th></tr>';
+    tbody.innerHTML=rows.length
+      ? rows.map(r=>'<tr class="row-'+r.tStatus+'"><td>'+r.emp+'</td><td>'+r.team+'</td><td>'+r.qual+'</td><td>'+formatDate(r.date)+'</td><td>'+(r.type||'—')+'</td>'+
+          '<td><div class="status-cell"><div class="status-dot status-'+r.tStatus+'"></div><span class="badge-days '+r.tStatus+'">'+r.tLabel+'</span></div></td></tr>').join('')
+      : '<tr><td colspan="6" style="text-align:center;color:#999;padding:1rem;">לא נמצאו רישומים בחודש זה</td></tr>';
+
+    chartTitleEl.textContent='התפלגות עמידה בזמנים לפי עובד — '+HEBREW_MONTHS_FULL[month-1]+' '+year+teamSuffix;
+    const empCounts={};
+    rows.forEach(r=>{
+      if(!empCounts[r.emp]) empCounts[r.emp]={green:0,orange:0,red:0};
+      empCounts[r.emp][r.tStatus]++;
+    });
+    const labels=Object.keys(empCounts);
+    if(historyChartInst) historyChartInst.destroy();
+    if(labels.length){
+      document.getElementById('history-chart').style.height=Math.max(160,labels.length*34)+'px';
+      historyChartInst=new Chart(document.getElementById('history-chart').getContext('2d'),{
+        type:'bar',
+        data:{labels,datasets:[
+          {label:'בזמן',data:labels.map(l=>empCounts[l].green),backgroundColor:'#38a169',borderRadius:3},
+          {label:'קרוב לתאריך',data:labels.map(l=>empCounts[l].orange),backgroundColor:'#e6a817',borderRadius:3},
+          {label:'באיחור',data:labels.map(l=>empCounts[l].red),backgroundColor:'#e53e3e',borderRadius:3},
+        ]},
+        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}},
+          scales:{x:{stacked:true,ticks:{stepSize:1,font:{size:10}}},y:{stacked:true,ticks:{font:{size:11}}}}}
+      });
+    }
+  } else if(_historyMode==='yearly'){
+    const year=parseInt(document.getElementById('hist-yearly-year').value);
+    const scopeId=document.getElementById('hist-yearly-employee-select').value;
+    const yearlyTeamFilterVal=document.getElementById('hist-yearly-team-filter')?document.getElementById('hist-yearly-team-filter').value:'all';
+    const emps=await getEmployees();
+    let scopedEmps=scopeId==='all'?emps:emps.filter(e=>e.id===scopeId);
+    if(scopeId==='all'){
+      if(yearlyTeamFilterVal==='__none__'){ scopedEmps=scopedEmps.filter(e=>!e.team); }
+      else if(yearlyTeamFilterVal!=='all'){ scopedEmps=scopedEmps.filter(e=>e.team===yearlyTeamFilterVal); }
+    }
+    scopedEmps.forEach(emp=>{
+      const empAssignment=assignments[emp.id];
+      const applicableQuals=empAssignment?quals.filter(q=>empAssignment[q.id]):quals;
+      const saved=allData[emp.id]||{};
+      const teamName=emp.team?(teamNameById[emp.team]||'ללא צוות'):'ללא צוות';
+      applicableQuals.forEach(q=>{
+        const rec=saved[q.id]||{};
+        const histRaw=rec.history?Object.values(rec.history).filter(h=>h&&h.date):[];
+        const annotated=computeHistoryTimeliness(histRaw,q.freq);
+        annotated.forEach(h=>{
+          const y=parseInt(h.date.split('-')[0]);
+          if(y===year){ rows.push({emp:emp.name,team:teamName,qual:q.name,date:h.date,type:h.type||'',tStatus:h.tStatus,tLabel:h.tLabel}); }
+        });
+      });
+    });
+    rows.sort((a,b)=>a.date<b.date?-1:(a.date>b.date?1:0));
+
+    if(scopeId==='all'){
+      const teamSuffix=yearlyTeamFilterVal==='all'?'':(yearlyTeamFilterVal==='__none__'?' — ללא צוות':' — '+(teamNameById[yearlyTeamFilterVal]||''));
+      titleEl.textContent='סיכום שנתי — '+year+' — כל העובדים'+teamSuffix;
+      thead.innerHTML='<tr><th>עובד</th><th>צוות</th><th>כשירות</th><th>תאריך</th><th>סוג</th><th>עמידה בזמנים</th></tr>';
+      tbody.innerHTML=rows.length
+        ? rows.map(r=>'<tr class="row-'+r.tStatus+'"><td>'+r.emp+'</td><td>'+r.team+'</td><td>'+r.qual+'</td><td>'+formatDate(r.date)+'</td><td>'+(r.type||'—')+'</td>'+
+            '<td><div class="status-cell"><div class="status-dot status-'+r.tStatus+'"></div><span class="badge-days '+r.tStatus+'">'+r.tLabel+'</span></div></td></tr>').join('')
+        : '<tr><td colspan="6" style="text-align:center;color:#999;padding:1rem;">לא נמצאו רישומים בשנה זו</td></tr>';
+
+      chartTitleEl.textContent='התפלגות עמידה בזמנים לפי עובד — '+year+teamSuffix;
+      const empCounts={};
+      rows.forEach(r=>{
+        if(!empCounts[r.emp]) empCounts[r.emp]={green:0,orange:0,red:0};
+        empCounts[r.emp][r.tStatus]++;
+      });
+      const labels=Object.keys(empCounts);
+      if(historyChartInst) historyChartInst.destroy();
+      if(labels.length){
+        document.getElementById('history-chart').style.height=Math.max(160,labels.length*34)+'px';
+        historyChartInst=new Chart(document.getElementById('history-chart').getContext('2d'),{
+          type:'bar',
+          data:{labels,datasets:[
+            {label:'בזמן',data:labels.map(l=>empCounts[l].green),backgroundColor:'#38a169',borderRadius:3},
+            {label:'קרוב לתאריך',data:labels.map(l=>empCounts[l].orange),backgroundColor:'#e6a817',borderRadius:3},
+            {label:'באיחור',data:labels.map(l=>empCounts[l].red),backgroundColor:'#e53e3e',borderRadius:3},
+          ]},
+          options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}},
+            scales:{x:{stacked:true,ticks:{stepSize:1,font:{size:10}}},y:{stacked:true,ticks:{font:{size:11}}}}}
+        });
+      }
+    } else {
+      const emp=emps.find(e=>e.id===scopeId);
+      titleEl.textContent='סיכום שנתי — '+year+' — '+(emp?emp.name:'');
+      thead.innerHTML='<tr><th>כשירות</th><th>תאריך</th><th>סוג</th><th>עמידה בזמנים</th></tr>';
+      tbody.innerHTML=rows.length
+        ? rows.map(r=>'<tr class="row-'+r.tStatus+'"><td>'+r.qual+'</td><td>'+formatDate(r.date)+'</td><td>'+(r.type||'—')+'</td>'+
+            '<td><div class="status-cell"><div class="status-dot status-'+r.tStatus+'"></div><span class="badge-days '+r.tStatus+'">'+r.tLabel+'</span></div></td></tr>').join('')
+        : '<tr><td colspan="4" style="text-align:center;color:#999;padding:1rem;">אין רישומים בשנה זו</td></tr>';
+
+      chartTitleEl.textContent='התפלגות עמידה בזמנים — '+(emp?emp.name:'')+' — '+year;
+      const counts={green:0,orange:0,red:0};
+      rows.forEach(r=>{ counts[r.tStatus]++; });
+      if(historyChartInst) historyChartInst.destroy();
+      if(rows.length){
+        historyChartInst=new Chart(document.getElementById('history-chart').getContext('2d'),{
+          type:'doughnut',
+          data:{labels:['בזמן','קרוב לתאריך','באיחור'],datasets:[{data:[counts.green,counts.orange,counts.red],backgroundColor:['#38a169','#e6a817','#e53e3e'],borderWidth:0}]},
+          options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}}}
+        });
+      }
+    }
+  } else {
+    const empId=document.getElementById('hist-employee-select').value;
+    const qualFilterVal=document.getElementById('hist-employee-qual-filter')?document.getElementById('hist-employee-qual-filter').value:'all';
+    const emps=await getEmployees();
+    const emp=emps.find(e=>e.id===empId);
+    const empAssignment=assignments[empId];
+    let applicableQuals=empAssignment?quals.filter(q=>empAssignment[q.id]):quals;
+    if(qualFilterVal!=='all'){ applicableQuals=applicableQuals.filter(q=>q.id===qualFilterVal); }
+    const saved=allData[empId]||{};
+    applicableQuals.forEach(q=>{
+      const rec=saved[q.id]||{};
+      const histRaw=rec.history?Object.values(rec.history).filter(h=>h&&h.date):[];
+      const annotated=computeHistoryTimeliness(histRaw,q.freq);
+      annotated.forEach(h=>{ rows.push({qual:q.name,date:h.date,type:h.type||'',tStatus:h.tStatus,tLabel:h.tLabel}); });
+    });
+    rows.sort((a,b)=>a.date>b.date?-1:(a.date<b.date?1:0));
+    const qualSuffix=qualFilterVal==='all'?'':(' — '+(quals.find(q=>q.id===qualFilterVal)||{}).name);
+    titleEl.textContent='סיכום היסטוריה מלא — '+(emp?emp.name:'')+qualSuffix;
+    thead.innerHTML='<tr><th>כשירות</th><th>תאריך</th><th>סוג</th><th>עמידה בזמנים</th></tr>';
+    tbody.innerHTML=rows.length
+      ? rows.map(r=>'<tr class="row-'+r.tStatus+'"><td>'+r.qual+'</td><td>'+formatDate(r.date)+'</td><td>'+(r.type||'—')+'</td>'+
+          '<td><div class="status-cell"><div class="status-dot status-'+r.tStatus+'"></div><span class="badge-days '+r.tStatus+'">'+r.tLabel+'</span></div></td></tr>').join('')
+      : '<tr><td colspan="4" style="text-align:center;color:#999;padding:1rem;">אין היסטוריה עדיין</td></tr>';
+
+    chartTitleEl.textContent='התפלגות עמידה בזמנים — '+(emp?emp.name:'')+qualSuffix;
+    const counts={green:0,orange:0,red:0};
+    rows.forEach(r=>{ counts[r.tStatus]++; });
+    if(historyChartInst) historyChartInst.destroy();
+    if(rows.length){
+      historyChartInst=new Chart(document.getElementById('history-chart').getContext('2d'),{
+        type:'doughnut',
+        data:{labels:['בזמן','קרוב לתאריך','באיחור'],datasets:[{data:[counts.green,counts.orange,counts.red],backgroundColor:['#38a169','#e6a817','#e53e3e'],borderWidth:0}]},
+        options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}}}
+      });
+    }
+  }
+};
+
+window.downloadHistoryPdf=function(){
+  window.print();
+};
+
+// ===== TEAMS MANAGER =====
+let _workingTeams=[];
+async function buildTeamsEditor(){
+  const teams=await getTeams();
+  _workingTeams=teams.map(t=>({...t}));
+  renderTeamInputs(_workingTeams);
+}
+function renderTeamInputs(teams){
+  const c=document.getElementById('team-inputs');
+  if(!c) return;
+  c.innerHTML='';
+  if(!teams.length){
+    c.innerHTML='<p style="font-size:13px;color:#999;margin-bottom:.5rem;">אין עדיין צוותים מוגדרים — הוסיפו צוות ראשון למטה.</p>';
+    return;
+  }
+  teams.forEach((t,i)=>{
+    const div=document.createElement('div');div.className='qual-row';
+    div.innerHTML='<div class="qual-num">'+(i+1)+'</div>'+
+      '<input class="qual-name" type="text" value="'+t.name+'" id="team-name-'+i+'" placeholder="שם צוות '+(i+1)+'" style="flex:1;">'+
+      '<button class="btn-del-sec" onclick="deleteTeam('+i+')" title="מחק">×</button>';
+    c.appendChild(div);
+  });
+}
+function getCurrentTeams(){
+  const teams=[];let i=0;
+  while(document.getElementById('team-name-'+i)){
+    const name=document.getElementById('team-name-'+i).value.trim()||'צוות '+(i+1);
+    const existingId=_workingTeams[i]?_workingTeams[i].id:('team'+Date.now()+i);
+    teams.push({id:existingId,name});
+    i++;
+  }
+  return teams;
+}
+window.addTeam=function(){
+  _workingTeams=getCurrentTeams();
+  _workingTeams.push({id:'team'+Date.now(),name:'צוות '+(_workingTeams.length+1)});
+  renderTeamInputs(_workingTeams);
+};
+window.deleteTeam=function(idx){
+  if(!confirm('למחוק את "'+_workingTeams[idx].name+'"? עובדים ששויכו לצוות הזה יעברו ל"ללא צוות".'))return;
+  _workingTeams=getCurrentTeams();
+  _workingTeams.splice(idx,1);
+  renderTeamInputs(_workingTeams);
+};
+window.saveTeams=async function(){
+  const teams=getCurrentTeams();
+  showLoading(true);
+  await fbSet('quals_config/teams',teams);
+  cachedTeams=teams;_workingTeams=teams;
+  showLoading(false);
+  showSaveMsg('teams-save-msg');
+  await buildEmployeeManager();
+  await renderMasterView();
+  await buildHistoryControls();
+};
+
+// ===== EMPLOYEES MANAGER =====
+let _workingEmps=[];
+let _teamsForEmpManager=[];
+async function buildEmployeeManager(){
+  const emps=await getEmployees();
+  _workingEmps=emps.map(e=>({...e}));
+  _teamsForEmpManager=await getTeams();
+  renderEmpRows(_workingEmps);
+}
+function renderEmpRows(emps){
+  const c=document.getElementById('emp-manage-list');c.innerHTML='';
+  const teamOptionsHtml=(selectedTeamId)=>{
+    let html='<option value=""'+(!selectedTeamId?' selected':'')+'>ללא צוות</option>';
+    _teamsForEmpManager.forEach(t=>{
+      html+='<option value="'+t.id+'"'+(selectedTeamId===t.id?' selected':'')+'>'+t.name+'</option>';
+    });
+    return html;
+  };
+  emps.forEach((emp,i)=>{
+    const div=document.createElement('div');div.className='emp-manage-row';
+    div.innerHTML=
+      '<div class="emp-manage-num">'+(i+1)+'</div>'+
+      '<div style="display:flex;flex-direction:column;flex:1;gap:3px;min-width:90px;">'+
+        '<span class="emp-manage-label">שם תצוגה</span>'+
+        '<input class="emp-manage-name" type="text" value="'+emp.name+'" id="emp-name-'+i+'"></div>'+
+      '<div style="display:flex;flex-direction:column;gap:3px;">'+
+        '<span class="emp-manage-label">קוד (4 ספרות)</span>'+
+        '<input class="emp-manage-pin" type="text" value="'+emp.pin+'" id="emp-pin-'+i+'" maxlength="4" inputmode="numeric"></div>'+
+      '<div style="display:flex;flex-direction:column;gap:3px;">'+
+        '<span class="emp-manage-label">צוות</span>'+
+        '<select class="emp-team-select" id="emp-team-'+i+'">'+teamOptionsHtml(emp.team)+'</select></div>'+
+      '<button class="btn-del-emp" onclick="deleteEmployee('+i+')" title="מחק">×</button>';
+    c.appendChild(div);
+  });
+}
+window.addEmployee=function(){
+  _workingEmps.forEach((emp,i)=>{
+    const n=document.getElementById('emp-name-'+i);const p=document.getElementById('emp-pin-'+i);const t=document.getElementById('emp-team-'+i);
+    if(n)emp.name=n.value.trim()||emp.name;if(p)emp.pin=p.value.trim()||emp.pin;if(t)emp.team=t.value;
+  });
+  _workingEmps.push({id:'emp'+Date.now(),name:'עובד '+(_workingEmps.length+1),pin:'0000',team:''});
+  renderEmpRows(_workingEmps);
+};
+window.deleteEmployee=function(idx){
+  if(_workingEmps.length<=1){alert('חייב להיות לפחות עובד אחד');return;}
+  if(!confirm('למחוק "'+_workingEmps[idx].name+'"?'))return;
+  _workingEmps.splice(idx,1);renderEmpRows(_workingEmps);
+};
+window.saveEmployeeManage=async function(){
+  let errors=[];
+  const updated=_workingEmps.map((emp,i)=>{
+    const n=document.getElementById('emp-name-'+i);
+    const p=document.getElementById('emp-pin-'+i);
+    const t=document.getElementById('emp-team-'+i);
+    const newName=n?n.value.trim():emp.name;
+    const newPin=p?p.value.trim():emp.pin;
+    const newTeam=t?t.value:(emp.team||'');
+    if(!newName) errors.push('שם עובד '+(i+1)+' ריק');
+    if(!/^\d{4}$/.test(newPin)){if(p)p.style.borderColor='#e53e3e';errors.push('קוד עובד '+(i+1)+' חייב להיות 4 ספרות');}
+    else{if(p)p.style.borderColor='#e0e0e0';}
+    return{...emp,name:newName,pin:newPin,team:newTeam};
+  });
+  if(errors.length){alert('שגיאות:\n'+errors.join('\n'));return;}
+  showLoading(true);
+  await fbSet('quals_config/employees',updated);
+  cachedEmployees=updated;_workingEmps=updated;
+  showLoading(false);
+  buildLoginSelect();
+  showSaveMsg('emp-manage-msg');
+  await renderMasterView();
+  await buildAssignmentEditor();
+  await buildHistoryControls();
+  await buildAvailabilityTable();
+};
+
+// ===== EMPLOYEE AVAILABILITY (mark as unavailable for a date range) =====
+let _availabilityModalEmpId=null, _availabilityModalEmpName=null;
+async function buildAvailabilityTable(){
+  const tbody=document.getElementById('availability-table-body');
+  if(!tbody) return;
+  const emps=await getEmployees();
+  const unavailability=await getUnavailability();
+  tbody.innerHTML='';
+  emps.forEach(emp=>{
+    const record=unavailability[emp.id];
+    const active=isCurrentlyUnavailable(record);
+    const statusHtml=active
+      ?'<span class="unavailable-badge">לא זמין עד '+formatDate(record.endDate)+'</span> <span style="font-size:11px;color:#888;">— '+(record.reason||'')+'</span>'
+      :(record?'<span class="available-badge">זמין (סטטוס קודם הסתיים)</span>':'<span class="available-badge">זמין</span>');
+    const tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td data-label="עובד" style="font-weight:700;">'+emp.name+'</td>'+
+      '<td data-label="סטטוס נוכחי">'+statusHtml+'</td>'+
+      '<td data-label="פעולות">'+
+        '<button class="view-btn" onclick="openAvailabilityModal(\''+emp.id+'\',\''+emp.name.replace(/'/g,"\\'")+'\')">עדכן</button>'+
+        (record?' <button class="view-btn" style="background:#fee2e2;color:#991b1b;" onclick="quickClearAvailability(\''+emp.id+'\')">בטל</button>':'')+
+        '</td>';
+    tbody.appendChild(tr);
+  });
+}
+window.openAvailabilityModal=async function(empId,empName){
+  _availabilityModalEmpId=empId;_availabilityModalEmpName=empName;
+  document.getElementById('availability-modal-title').textContent='עדכון זמינות — '+empName;
+  document.getElementById('avail-err').textContent='';
+  const unavailability=await getUnavailability();
+  const record=unavailability[empId]||{};
+  document.getElementById('avail-reason').value=record.reason||'';
+  const startParts=parseDateParts(record.startDate||'');
+  const endParts=parseDateParts(record.endDate||'');
+  document.getElementById('avail-start-picker').innerHTML='<div class="date-picker-manual">'+
+    buildDaySelect('avail-start-day',startParts.d)+buildMonthSelect('avail-start-month',startParts.m)+buildYearSelect('avail-start-year',startParts.y)+'</div>';
+  document.getElementById('avail-end-picker').innerHTML='<div class="date-picker-manual">'+
+    buildDaySelect('avail-end-day',endParts.d)+buildMonthSelect('avail-end-month',endParts.m)+buildYearSelect('avail-end-year',endParts.y)+'</div>';
+  document.getElementById('availability-modal').classList.add('open');
+};
+window.closeAvailabilityModal=function(){
+  document.getElementById('availability-modal').classList.remove('open');
+  _availabilityModalEmpId=null;_availabilityModalEmpName=null;
+};
+window.saveAvailability=async function(){
+  const err=document.getElementById('avail-err');
+  err.textContent='';
+  const reason=document.getElementById('avail-reason').value.trim();
+  const startDate=readManualDateParts('avail-start');
+  const endDate=readManualDateParts('avail-end');
+  if(!startDate||!endDate){ err.textContent='יש לבחור יום, חודש ושנה עבור שני התאריכים'; return; }
+  if(endDate<startDate){ err.textContent='תאריך הסיום חייב להיות אחרי תאריך ההתחלה'; return; }
+  if(!reason){ if(!confirm('לא הוזנה סיבה — להמשיך בכל זאת?')) return; }
+  showLoading(true);
+  await db.ref('quals_config/unavailability/'+_availabilityModalEmpId).set({reason,startDate,endDate});
+  cachedUnavailability=null;
+  showLoading(false);
+  window.closeAvailabilityModal();
+  await buildAvailabilityTable();
+  await renderMasterView();
+};
+window.clearAvailability=async function(){
+  if(!_availabilityModalEmpId) return;
+  if(!confirm('לבטל את סטטוס אי-הזמינות של '+_availabilityModalEmpName+'? העובד יחזור להיחשב זמין.')) return;
+  showLoading(true);
+  await db.ref('quals_config/unavailability/'+_availabilityModalEmpId).remove();
+  cachedUnavailability=null;
+  showLoading(false);
+  window.closeAvailabilityModal();
+  await buildAvailabilityTable();
+  await renderMasterView();
+};
+window.quickClearAvailability=async function(empId){
+  const emps=await getEmployees();
+  const emp=emps.find(e=>e.id===empId);
+  if(!confirm('לבטל את סטטוס אי-הזמינות של '+(emp?emp.name:'העובד')+'?')) return;
+  showLoading(true);
+  await db.ref('quals_config/unavailability/'+empId).remove();
+  cachedUnavailability=null;
+  showLoading(false);
+  await buildAvailabilityTable();
+  await renderMasterView();
+};
+
+// ===== MESSAGES TO EMPLOYEES (one-time or recurring, in-app) =====
+window.toggleMsgAllEmps=function(){
+  const all=document.getElementById('msg-all-emps').checked;
+  document.getElementById('msg-emp-list').style.display=all?'none':'flex';
+};
+window.toggleMsgRecurringFields=function(){
+  const recurring=document.querySelector('input[name="msg-schedule"]:checked').value==='recurring';
+  document.getElementById('msg-recurring-fields').style.display=recurring?'flex':'none';
+  document.getElementById('msg-recurring-note').style.display=recurring?'block':'none';
+  if(recurring) window.toggleMsgFrequencyFields();
+};
+window.toggleMsgFrequencyFields=function(){
+  const freq=document.getElementById('msg-frequency').value;
+  document.getElementById('msg-weekly-field').style.display=freq==='weekly'?'inline-flex':'none';
+  document.getElementById('msg-monthly-field').style.display=freq==='monthly'?'inline-flex':'none';
+};
+async function buildMessagesEditor(){
+  const listEl=document.getElementById('msg-emp-list');
+  if(!listEl) return;
+  const emps=await getEmployees();
+  listEl.innerHTML='';
+  emps.forEach(e=>{
+    const row=document.createElement('label');row.className='assign-row';
+    row.innerHTML='<input type="checkbox" class="msg-emp-chk" value="'+e.id+'"><span>'+e.name+'</span>';
+    listEl.appendChild(row);
+  });
+  const domSel=document.getElementById('msg-day-of-month');
+  if(domSel && !domSel.options.length){
+    for(let d=1;d<=28;d++){ const o=document.createElement('option');o.value=d;o.textContent=d;domSel.appendChild(o); }
+  }
+  await renderMessagesTable();
+}
+window.sendOrScheduleMessage=async function(){
+  const text=document.getElementById('msg-text').value.trim();
+  if(!text){ alert('יש לכתוב תוכן להודעה'); return; }
+  const allEmps=document.getElementById('msg-all-emps').checked;
+  let targets='all';
+  if(!allEmps){
+    const ids=Array.prototype.map.call(document.querySelectorAll('.msg-emp-chk:checked'),c=>c.value);
+    if(ids.length===0){ alert('יש לבחור לפחות עובד אחד, או לסמן "כל העובדים"'); return; }
+    targets={};
+    ids.forEach(id=>{targets[id]=true;});
+  }
+  const scheduleType=document.querySelector('input[name="msg-schedule"]:checked').value;
+  let recurring=null;
+  if(scheduleType==='recurring'){
+    const frequency=document.getElementById('msg-frequency').value;
+    recurring={frequency};
+    if(frequency==='weekly') recurring.dayOfWeek=parseInt(document.getElementById('msg-day-of-week').value);
+    if(frequency==='monthly') recurring.dayOfMonth=parseInt(document.getElementById('msg-day-of-month').value);
+  }
+  showLoading(true);
+  await db.ref('quals_messages').push({
+    text,targets,recurring,active:true,
+    createdAt:Date.now(),oneTimeSent:false,lastSentAt:null
+  });
+  showLoading(false);
+  document.getElementById('msg-text').value='';
+  showSaveMsg('msg-save-msg');
+  await renderMessagesTable();
+};
+function describeMsgTargets(targets,emps){
+  if(targets==='all') return 'כל העובדים';
+  const ids=Object.keys(targets||{});
+  const names=ids.map(id=>{const e=emps.find(x=>x.id===id);return e?e.name:id;});
+  return names.length?names.join(', '):'—';
+}
+function describeMsgSchedule(recurring){
+  if(!recurring) return 'חד-פעמית';
+  const DOW=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  if(recurring.frequency==='daily') return 'מחזורית — כל יום';
+  if(recurring.frequency==='weekly') return 'מחזורית — כל '+(DOW[recurring.dayOfWeek]||'')+ ' בשבוע';
+  if(recurring.frequency==='monthly') return 'מחזורית — יום '+recurring.dayOfMonth+' בכל חודש';
+  return 'מחזורית';
+}
+async function renderMessagesTable(){
+  const tbody=document.getElementById('messages-table-body');
+  if(!tbody) return;
+  const emps=await getEmployees();
+  const messagesObj=await fbGet('quals_messages')||{};
+  const messages=Object.entries(messagesObj).map(([key,m])=>({key,...m})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  tbody.innerHTML='';
+  if(!messages.length){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:#999;padding:1rem;">אין הודעות עדיין</td></tr>';
+    return;
+  }
+  messages.forEach(m=>{
+    const tr=document.createElement('tr');
+    const scheduleLabel=m.recurring
+      ?('<span class="recurring-badge">'+describeMsgSchedule(m.recurring)+'</span>')
+      :('חד-פעמית'+(m.oneTimeSent?' (נשלחה)':' (ממתינה)'));
+    const lastSent=m.lastSentAt?formatDate(new Date(m.lastSentAt).toISOString().slice(0,10)):'—';
+    tr.innerHTML=
+      '<td data-label="תוכן" style="max-width:220px;font-size:12px;">'+m.text.replace(/</g,'&lt;')+'</td>'+
+      '<td data-label="נמענים" style="font-size:12px;">'+describeMsgTargets(m.targets,emps)+'</td>'+
+      '<td data-label="תזמון" style="font-size:12px;">'+scheduleLabel+'</td>'+
+      '<td data-label="נשלחה לאחרונה" style="font-size:12px;">'+lastSent+'</td>'+
+      '<td data-label="פעולות"><button class="view-btn" style="background:#fee2e2;color:#991b1b;" onclick="deleteMessage(\''+m.key+'\')">מחק</button></td>';
+    tbody.appendChild(tr);
+  });
+}
+window.deleteMessage=async function(msgKey){
+  if(!confirm('למחוק את ההודעה הזו? אם היא מחזורית, היא תפסיק להישלח.')) return;
+  showLoading(true);
+  await db.ref('quals_messages/'+msgKey).remove();
+  showLoading(false);
+  await renderMessagesTable();
+};
+
+// ===== EMPLOYEE-SIDE: viewing messages addressed to them =====
+function isMessageDueForDisplay(m,lastReadTs){
+  if(!lastReadTs) return true; // never dismissed — always show
+  if(!m.recurring) return false; // one-time message already dismissed — hide forever
+  const elapsedDays=(Date.now()-lastReadTs)/86400000;
+  if(m.recurring.frequency==='daily') return elapsedDays>=1;
+  if(m.recurring.frequency==='weekly') return elapsedDays>=7;
+  if(m.recurring.frequency==='monthly') return elapsedDays>=28;
+  return false;
+}
+async function renderEmployeeMessages(){
+  const card=document.getElementById('emp-messages-card');
+  const listEl=document.getElementById('emp-messages-list');
+  if(!card||!listEl) return;
+  const messagesObj=await fbGet('quals_messages')||{};
+  const reads=await fbGet('quals_message_reads/'+currentUser.id)||{};
+  const messages=Object.entries(messagesObj)
+    .map(([key,m])=>({key,...m}))
+    .filter(m=>m.targets==='all'||(m.targets&&m.targets[currentUser.id]))
+    .filter(m=>isMessageDueForDisplay(m,reads[m.key]))
+    .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  if(!messages.length){ card.style.display='none'; listEl.innerHTML=''; return; }
+  card.style.display='block';
+  listEl.innerHTML=messages.map(m=>{
+    const dateStr=m.createdAt?formatDate(new Date(m.createdAt).toISOString().slice(0,10)):'';
+    return '<div class="msg-item unread">'+
+      '<div><div class="msg-text">'+m.text.replace(/</g,'&lt;')+'</div><div class="msg-date">'+dateStr+'</div></div>'+
+      '<button class="msg-dismiss" onclick="markMessageRead(\''+m.key+'\')" title="סמן כנקרא">✕</button>'+
+      '</div>';
+  }).join('');
+}
+window.markMessageRead=async function(msgKey){
+  await db.ref('quals_message_reads/'+currentUser.id+'/'+msgKey).set(Date.now());
+  await renderEmployeeMessages();
+};
+
+// ===== MASTER SETTINGS (password) =====
+window.saveMasterPassword=async function(){
+  const cur=document.getElementById('master-cur-pin').value.trim();
+  const nw=document.getElementById('master-new-pin').value.trim();
+  const nw2=document.getElementById('master-new-pin2').value.trim();
+  const err=document.getElementById('master-pin-err');
+  err.textContent='';
+  const master=await getMaster();
+  if(cur!==(master.pin||'9999')){err.textContent='הקוד הנוכחי שגוי';return;}
+  if(!/^\d{4}$/.test(nw)){err.textContent='הקוד החדש חייב להיות 4 ספרות';return;}
+  if(nw!==nw2){err.textContent='הקודים החדשים אינם תואמים';return;}
+  showLoading(true);
+  await fbSet('quals_config/master',{pin:nw});
+  cachedMaster={pin:nw};
+  showLoading(false);
+  document.getElementById('master-cur-pin').value='';
+  document.getElementById('master-new-pin').value='';
+  document.getElementById('master-new-pin2').value='';
+  showSaveMsg('master-pin-msg');
+};
+
+function showSaveMsg(id){
+  const msg=document.getElementById(id);
+  if(!msg) return;
+  msg.classList.add('show');setTimeout(()=>msg.classList.remove('show'),2500);
+}
+
+// ===== FULL SYSTEM DATA RESET (master only) =====
+window.resetAllSystemData=async function(){
+  if(!confirm('לאפס את כל תאריכי הביצוע של כל העובדים במערכת? הפעולה בלתי הפיכה!')) return;
+  if(!confirm('אישור אחרון: כל המילוי של כל הכשירויות אצל כל העובדים יימחק לצמיתות. להמשיך?')) return;
+  showLoading(true);
+  await db.ref('quals_data').remove();
+  showLoading(false);
+  showSaveMsg('reset-all-msg');
+  await renderMasterView();
+};
+
+// ===== MASTER DASHBOARD =====
+window.renderMasterView=async function(){
+  const emps=await getEmployees();
+  const quals=await getQuals();
+  const assignments=await getAssignments();
+  const teams=await getTeams();
+  const unavailability=await getUnavailability();
+  const allData=await fbGet('quals_data')||{};
+
+  // Populate / preserve the team filter dropdown
+  const teamFilterSel=document.getElementById('dash-team-filter');
+  if(teamFilterSel){
+    const previouslySelected=teamFilterSel.value;
+    teamFilterSel.innerHTML='<option value="all">כל הצוותים</option>';
+    teams.forEach(t=>{ const o=document.createElement('option');o.value=t.id;o.textContent=t.name;teamFilterSel.appendChild(o); });
+    const unassignedOpt=document.createElement('option');unassignedOpt.value='__none__';unassignedOpt.textContent='ללא צוות';teamFilterSel.appendChild(unassignedOpt);
+    if(previouslySelected && (previouslySelected==='all'||previouslySelected==='__none__'||teams.some(t=>t.id===previouslySelected))){
+      teamFilterSel.value=previouslySelected;
+    }
+  }
+  const teamFilterVal=teamFilterSel?teamFilterSel.value:'all';
+  const teamNameById={};
+  teams.forEach(t=>{ teamNameById[t.id]=t.name; });
+
+  let empData=emps.map(emp=>{
+    const saved=allData[emp.id]||{};
+    const empAssignment=assignments[emp.id];
+    const applicableQuals=empAssignment?quals.filter(q=>empAssignment[q.id]):quals;
+    const rows=applicableQuals.map(q=>{
+      const rec=saved[q.id]||{};
+      const st=computeStatus(rec.lastDate||'',q.freq);
+      return{...q,lastDate:rec.lastDate||'',...st};
+    });
+    const g=rows.filter(r=>r.status==='green').length;
+    const o=rows.filter(r=>r.status==='orange').length;
+    const r=rows.filter(r=>r.status==='red').length;
+    notifyForRows(rows,emp.name);
+    const teamName=emp.team?(teamNameById[emp.team]||'ללא צוות'):'ללא צוות';
+    const unavailRecord=unavailability[emp.id];
+    const unavailable=isCurrentlyUnavailable(unavailRecord);
+    return{emp,rows,g,o,r,total:rows.length,teamId:emp.team||'',teamName,unavailable,unavailRecord};
+  });
+
+  // Apply team filter
+  if(teamFilterVal && teamFilterVal!=='all'){
+    if(teamFilterVal==='__none__'){ empData=empData.filter(d=>!d.teamId); }
+    else{ empData=empData.filter(d=>d.teamId===teamFilterVal); }
+  }
+  // Group visually by team (unassigned last)
+  empData.sort((a,b)=>{
+    if(!a.teamId && b.teamId) return 1;
+    if(a.teamId && !b.teamId) return -1;
+    if(a.teamName!==b.teamName) return a.teamName<b.teamName?-1:1;
+    return 0;
+  });
+
+  const totalG=empData.reduce((s,d)=>s+d.g,0);
+  const totalO=empData.reduce((s,d)=>s+d.o,0);
+  const totalR=empData.reduce((s,d)=>s+d.r,0);
+
+  document.getElementById('stat-employees').textContent=empData.length;
+  document.getElementById('stat-green').textContent=totalG;
+  document.getElementById('stat-orange').textContent=totalO;
+  document.getElementById('stat-red').textContent=totalR;
+
+  // Bar chart — stacked per employee, labeled with team name for clarity
+  const labels=empData.map(d=>d.emp.name+(d.teamId?' ('+d.teamName+')':'')+(d.unavailable?' [לא זמין]':''));
+  const maxTotal=Math.max(1,...empData.map(d=>d.total));
+  if(barChartInst) barChartInst.destroy();
+  const unavailBorders=empData.map(d=>d.unavailable?'#8b5cf6':'rgba(0,0,0,0)');
+  const unavailBorderWidths=empData.map(d=>d.unavailable?3:0);
+  barChartInst=new Chart(document.getElementById('barChart').getContext('2d'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'בתוקף',data:empData.map(d=>d.g),backgroundColor:'#38a169',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderRadius:3},
+      {label:'מתקרב',data:empData.map(d=>d.o),backgroundColor:'#e6a817',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderRadius:3},
+      {label:'פג תוקף',data:empData.map(d=>d.r),backgroundColor:'#e53e3e',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderRadius:3},
+    ]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}},
+      scales:{x:{stacked:true,ticks:{font:{size:9},color:(ctx)=>empData[ctx.index]&&empData[ctx.index].unavailable?'#8b5cf6':'#666'}},y:{stacked:true,min:0,max:maxTotal,ticks:{stepSize:1,font:{size:10}}}}}
+  });
+
+  // Pie — overall distribution (within current team filter)
+  if(pieChartInst) pieChartInst.destroy();
+  pieChartInst=new Chart(document.getElementById('pieChart').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:['בתוקף','מתקרב לפקיעה','פג תוקף'],datasets:[{data:[totalG,totalO,totalR],backgroundColor:['#38a169','#e6a817','#e53e3e'],borderWidth:0}]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}}}
+  });
+
+  // Table — grouped by team, with a team badge column
+  const tbody=document.getElementById('master-table-body');
+  tbody.innerHTML='';
+  let lastTeamHeader=null;
+  empData.forEach(d=>{
+    if(d.teamName!==lastTeamHeader){
+      lastTeamHeader=d.teamName;
+      const headerTr=document.createElement('tr');
+      headerTr.innerHTML='<td colspan="7" style="background:#f8f9fa;font-weight:700;font-size:12px;color:#555;">'+d.teamName+'</td>';
+      tbody.appendChild(headerTr);
+    }
+    const tr=document.createElement('tr');
+    if(d.unavailable) tr.className='row-unavailable';
+    else if(d.r>0) tr.style.background='#fff5f5';
+    const teamBadgeClass=d.teamId?'':'none';
+    const availHtml=d.unavailable
+      ?'<span class="unavailable-badge">לא זמין עד '+formatDate(d.unavailRecord.endDate)+'</span>'
+      :'<span class="available-badge">זמין</span>';
+    tr.innerHTML=
+      '<td data-label="עובד" style="font-weight:700;">'+d.emp.name+'</td>'+
+      '<td data-label="צוות"><span class="team-badge '+teamBadgeClass+'">'+d.teamName+'</span></td>'+
+      '<td data-label="זמינות">'+availHtml+'</td>'+
+      '<td data-label="בתוקף"><span class="count-pill pill-green">'+d.g+'</span></td>'+
+      '<td data-label="מתקרב"><span class="count-pill pill-orange">'+d.o+'</span></td>'+
+      '<td data-label="פג תוקף"><span class="count-pill pill-red">'+d.r+'</span></td>'+
+      '<td data-label="פרטים"><button class="view-btn" onclick="showDetail(\''+d.emp.id+'\',\''+d.emp.name.replace(/'/g,"\\'")+'\')">צפה</button></td>';
+    tbody.appendChild(tr);
+  });
+};
+
+window.showDetail=async function(empId,empName){
+  const rows=sortByUrgency(await loadEmpQualData(empId));
+  document.getElementById('detail-title').textContent='פרטי '+empName;
+  const tbody=document.getElementById('detail-body');
+  tbody.innerHTML='';
+  rows.forEach((row,i)=>{
+    const tr=document.createElement('tr');
+    const dispClass=displayStatusClass(row);
+    tr.className='row-'+dispClass;
+    const nextDisplay=row.nextDate?formatDate(row.nextDate):'—';
+    const lastDisplay=row.lastDate?(formatDate(row.lastDate)+(row.lastType?' <span class="type-badge">'+row.lastType+'</span>':'')):'—';
+    const histId='hist-'+empId+'-'+row.id;
+    const histCount=row.history?row.history.length:0;
+    const histListHtml=histCount
+      ? '<ul>'+row.history.map(h=>{
+          if(h.managerAction){
+            return '<li style="background:#f3f4f6;border-radius:6px;padding:3px 6px;">'+
+              '<span style="color:#4b5563;">🔧 '+formatDate(h.date)+' — '+h.actionLabel+(h.reason?' — סיבה: '+h.reason:'')+'</span>'+
+              '<span class="hist-actions"><button class="hist-del-btn" onclick="deleteHistoryEntry(\''+empId+'\',\''+row.id+'\',\''+h.key+'\',\''+empName.replace(/'/g,"\\'")+'\')" title="מחק רשומה זו">×</button></span></li>';
+          }
+          const isCurrent=(h.date===row.lastDate);
+          const restoreBtn=isCurrent?'':'<button class="hist-restore-btn" onclick="restoreHistoryEntry(\''+empId+'\',\''+row.id+'\',\''+h.date+'\',\''+(h.type||'')+'\',\''+empName.replace(/'/g,"\\'")+'\')" title="שחזר לתאריך זה">↺ שחזר</button>';
+          return '<li><span>'+formatDate(h.date)+(h.type?' — '+h.type:'')+(isCurrent?' <b style="color:#166534;">(נוכחי)</b>':'')+'</span>'+
+            '<span class="hist-actions">'+restoreBtn+
+            '<button class="hist-del-btn" onclick="deleteHistoryEntry(\''+empId+'\',\''+row.id+'\',\''+h.key+'\',\''+empName.replace(/'/g,"\\'")+'\')" title="מחק רשומה זו">×</button></span></li>';
+        }).join('')+'</ul>'
+      : '<span style="color:#999;">אין היסטוריה עדיין</span>';
+    tr.innerHTML=
+      '<td style="color:#888;font-size:12px;">'+(i+1)+'</td>'+
+      '<td style="font-weight:600;font-size:13px;">'+row.name+'</td>'+
+      '<td><span class="freq-badge">כל '+row.freq+' ימים</span></td>'+
+      '<td style="font-size:12px;">'+lastDisplay+'</td>'+
+      '<td style="font-size:12px;">'+nextDisplay+'</td>'+
+      '<td><div class="status-cell"><div class="status-dot status-'+dispClass+'"></div><span class="badge-days '+dispClass+'">'+row.label+'</span></div></td>'+
+      '<td><button class="view-btn" onclick="toggleHistory(\''+histId+'\')">היסטוריה ('+histCount+')</button>'+
+        '<div class="hist-box" id="'+histId+'">'+histListHtml+'</div></td>'+
+      '<td><button class="view-btn" style="background:#fee2e2;color:#991b1b;" onclick="resetQualForEmployee(\''+empId+'\',\''+row.id+'\',\''+row.name.replace(/'/g,"\\'")+'\',\''+empName.replace(/'/g,"\\'")+'\')" title="אפס כשירות זו לטרם בוצע לראשונה">אפס</button></td>';
+    tbody.appendChild(tr);
+  });
+  document.getElementById('detail-modal').classList.add('open');
+  document.getElementById('detail-modal').dataset.empId=empId;
+  document.getElementById('detail-modal').dataset.empName=empName;
+};
+window.toggleHistory=function(histId){
+  const el=document.getElementById(histId);
+  if(el) el.classList.toggle('open');
+};
+window.resetQualForEmployee=async function(empId,qualId,qualName,empName){
+  if(!confirm('לאפס את "'+qualName+'" עבור '+empName+'? היא תחזור למצב "טרם בוצע לראשונה". ההיסטוריה שכבר נשמרה לא נמחקת — רק תאריך "ביצוע אחרון" הנוכחי מתאפס.')) return;
+  const reason=prompt('סיבה לאיפוס (אופציונלי — יופיע בהיסטוריה ובדוחות):','')||'';
+  showLoading(true);
+  await db.ref('quals_data/'+empId+'/'+qualId).update({lastDate:'',lastType:''});
+  await db.ref('quals_data/'+empId+'/'+qualId+'/history').push({
+    date:todayStr(),type:'פעולת מנהל',savedAt:Date.now(),
+    managerAction:true,actionLabel:'איפוס לטרם בוצע לראשונה',reason:reason.trim()
+  });
+  showLoading(false);
+  await window.showDetail(empId,empName);
+  await renderMasterView();
+};
+window.restoreHistoryEntry=async function(empId,qualId,date,type,empName){
+  if(!confirm('לשחזר את התאריך '+formatDate(date)+(type?' ('+type+')':'')+' כתאריך "ביצוע אחרון" הנוכחי? זה ידרוס את מה שרשום כרגע.')) return;
+  const reason=prompt('סיבה לשחזור (אופציונלי — יופיע בהיסטוריה ובדוחות):','')||'';
+  showLoading(true);
+  await db.ref('quals_data/'+empId+'/'+qualId).update({lastDate:date,lastType:type||''});
+  await db.ref('quals_data/'+empId+'/'+qualId+'/history').push({
+    date:todayStr(),type:'פעולת מנהל',savedAt:Date.now(),
+    managerAction:true,actionLabel:'שינה ל-'+formatDate(date)+(type?' ('+type+')':''),reason:reason.trim()
+  });
+  showLoading(false);
+  await window.showDetail(empId,empName);
+  await renderMasterView();
+};
+window.deleteHistoryEntry=async function(empId,qualId,entryKey,empName){
+  if(!confirm('למחוק את רשומת ההיסטוריה הזו? הפעולה בלתי הפיכה (זה משפיע רק על הדוח/היסטוריה — לא על תאריך "ביצוע אחרון" הנוכחי של העובד).')) return;
+  showLoading(true);
+  await db.ref('quals_data/'+empId+'/'+qualId+'/history/'+entryKey).remove();
+  showLoading(false);
+  await window.showDetail(empId,empName);
+};
+window.closeDetail=function(){document.getElementById('detail-modal').classList.remove('open');};
+
+</script>
+</body>
+</html>
