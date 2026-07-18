@@ -214,9 +214,10 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 <div id="loading-overlay"><div class="spinner"></div><div class="loading-text">מתחבר...</div></div>
 
 <div id="firebase-error">
-  <h2>Firebase לא מוגדר</h2>
-  <p>פתח את הקובץ בעורך טקסט ומלא את פרטי ה-Firebase בחלק שמסומן <code>firebaseConfig</code>.</p>
-  <p>אם ה-Firebase מוגדר נכון אך המסך הזה מופיע בכל זאת — ודאו שהפעלתם <b>Anonymous Authentication</b> תחת Firebase Console ← Authentication ← Sign-in method.</p>
+  <h2>בעיית חיבור</h2>
+  <p>לא הצלחנו להתחבר לשרת. זה קורה לרוב כשהחיבור לאינטרנט איטי או לא יציב.</p>
+  <p style="font-size:13px;color:#999;">בדקו את חיבור האינטרנט ונסו שוב. אם הבעיה חוזרת שוב ושוב — ודאו שמופעל <b>Anonymous Authentication</b> תחת Firebase Console ← Authentication ← Sign-in method.</p>
+  <button onclick="location.reload()" style="background:#4c1d95;color:white;border:none;padding:13px 34px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:.5rem;">נסה שוב</button>
 </div>
 
 <div id="login-screen" style="display:none;">
@@ -870,12 +871,22 @@ window.doLogin=async function(){
 
 let auth=null;
 var _authReady=false;
+var _authAttempts=0;
+function _tryAnonSignIn(){
+  if(!auth||_authReady) return;
+  _authAttempts++;
+  auth.signInAnonymously().catch(function(e){
+    console.error('כניסה אנונימית נכשלה (ניסיון '+_authAttempts+')',e);
+    // רשת סלולרית איטית / מעבר בין אנטנות — ננסה שוב מספר פעמים לפני שמוותרים
+    if(_authAttempts<5 && !_authReady){ setTimeout(_tryAnonSignIn,3000); }
+  });
+}
 try{
   app=firebase.initializeApp(firebaseConfig);
   db=firebase.database();
   auth=firebase.auth();
   auth.onAuthStateChanged(function(user){ if(user) _authReady=true; });
-  auth.signInAnonymously().catch(function(e){ console.error('כניסה אנונימית נכשלה',e); });
+  _tryAnonSignIn();
 }catch(e){}
 
 document.addEventListener('DOMContentLoaded',function(){
@@ -892,12 +903,15 @@ var _pollCount=0;
 var _t=setInterval(function(){
   if(_started) return;
   _pollCount++;
-  if(_pollCount>50){ // ~10 seconds without auth completing
+  // ~45 שניות — סבלנות ארוכה לרשתות סלולריות איטיות לפני שמציגים שגיאה
+  if(_pollCount>225){
     _started=true;
     clearInterval(_t);
     showFirebaseError();
     return;
   }
+  // אחרי ~8 שניות בלי חיבור, ננסה להתחבר שוב (למקרה שהניסיון הראשון אבד ברשת)
+  if(_pollCount===40 || _pollCount===100 || _pollCount===160){ _tryAnonSignIn(); }
   if(!db||!_authReady||!document.getElementById('login-screen')) return;
   _started=true;
   clearInterval(_t);
