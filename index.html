@@ -279,6 +279,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
       <button class="master-tab" onclick="showMasterTab('qualifications')">ניהול כשירויות</button>
       <button class="master-tab" onclick="showMasterTab('assignments')">שיוך כשירויות</button>
       <button class="master-tab" onclick="showMasterTab('history')">סיכום היסטוריה</button>
+      <button class="master-tab" onclick="showMasterTab('weekly')">אמצעים שבועי</button>
       <button class="master-tab" onclick="showMasterTab('messages')">הודעות לעובדים</button>
       <button class="master-tab" onclick="showMasterTab('employees')">ניהול עובדים</button>
       <button class="master-tab" onclick="showMasterTab('settings')">הגדרות מנהל</button>
@@ -417,6 +418,37 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
           </div>
         </div>
         <button class="btn-primary" onclick="downloadHistoryPdf()" style="margin-top:1rem;">הורד PDF</button>
+      </div>
+    </div>
+
+    <!-- WEEKLY MEANS -->
+    <div id="weekly-panel" class="panel">
+      <div class="panel-card">
+        <h3>אמצעים שבועי</h3>
+        <p class="panel-sub">בחרו טווח תאריכים כדי לראות אילו כשירויות בוצעו בטווח (ללא תלות במי ביצע) — כמה פעמים, באילו ימים בדיוק, מי ביצע, ובאיזה סוג ביצוע (יזום / תרגול).</p>
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem;">
+          <div>
+            <label style="font-weight:700;font-size:14px;display:block;margin-bottom:4px;">מתאריך</label>
+            <div id="weekly-start-picker"></div>
+          </div>
+          <div>
+            <label style="font-weight:700;font-size:14px;display:block;margin-bottom:4px;">עד תאריך</label>
+            <div id="weekly-end-picker"></div>
+          </div>
+          <button class="btn-primary" style="margin:0;" onclick="generateWeeklySummary()">הצג</button>
+        </div>
+        <div class="pin-err" id="weekly-err"></div>
+      </div>
+
+      <div class="employees-table-card" id="weekly-results-card" style="display:none;">
+        <h3 id="weekly-results-title">אמצעים שבועי</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>כשירות</th><th>סוג</th><th>כמות</th><th>ימים שבוצעו + מי ביצע</th></tr></thead>
+            <tbody id="weekly-results-body"></tbody>
+          </table>
+        </div>
+        <button class="btn-primary" onclick="downloadWeeklyPdf()" style="margin-top:1rem;">הורד PDF</button>
       </div>
     </div>
 
@@ -991,12 +1023,13 @@ async function enterMaster(){
 }
 
 window.showMasterTab=function(tab){
-  const tabs=['dashboard','qualifications','assignments','history','messages','employees','settings'];
+  const tabs=['dashboard','qualifications','assignments','history','weekly','messages','employees','settings'];
   document.querySelectorAll('.master-tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===tab));
   tabs.forEach(p=>document.getElementById(p+'-panel')?(document.getElementById(p+'-panel').style.display=p===tab?'block':'none'):null);
   if(tab==='qualifications') buildQualEditor();
   if(tab==='assignments') buildAssignmentEditor();
   if(tab==='history') buildHistoryControls();
+  if(tab==='weekly') buildWeeklyControls();
   if(tab==='messages') buildMessagesEditor();
   if(tab==='employees'){ buildTeamsEditor(); buildEmployeeManager(); buildAvailabilityTable(); }
   if(tab==='dashboard') renderMasterView();
@@ -1689,6 +1722,87 @@ window.quickClearAvailability=async function(empId){
   await renderMasterView();
 };
 
+// ===== WEEKLY MEANS (aggregate qualifications performed in a date range) =====
+const HEBREW_DAYS=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+function buildWeeklyControls(){
+  const startEl=document.getElementById('weekly-start-picker');
+  const endEl=document.getElementById('weekly-end-picker');
+  if(!startEl||!endEl) return;
+  const maxY=new Date().getFullYear();
+  const today=new Date();
+  const weekAgo=new Date(); weekAgo.setDate(today.getDate()-6);
+  const s=parseDateParts(weekAgo.toISOString().slice(0,10));
+  const e=parseDateParts(today.toISOString().slice(0,10));
+  startEl.innerHTML='<div class="date-picker-manual">'+buildDaySelect('weekly-start-day',s.d)+buildMonthSelect('weekly-start-month',s.m)+buildYearSelect('weekly-start-year',s.y,maxY)+'</div>';
+  endEl.innerHTML='<div class="date-picker-manual">'+buildDaySelect('weekly-end-day',e.d)+buildMonthSelect('weekly-end-month',e.m)+buildYearSelect('weekly-end-year',e.y,maxY)+'</div>';
+}
+function dayNameOf(dateStr){
+  const parts=dateStr.split('-').map(Number);
+  const d=new Date(parts[0],parts[1]-1,parts[2]);
+  return HEBREW_DAYS[d.getDay()];
+}
+window.generateWeeklySummary=async function(){
+  const err=document.getElementById('weekly-err');
+  err.textContent='';
+  const startDate=readManualDateParts('weekly-start');
+  const endDate=readManualDateParts('weekly-end');
+  if(!startDate||!endDate){ err.textContent='יש לבחור יום, חודש ושנה עבור שני התאריכים'; return; }
+  if(endDate<startDate){ err.textContent='תאריך הסיום חייב להיות אחרי תאריך ההתחלה'; return; }
+
+  const quals=await getQuals();
+  const qualNameById={};
+  quals.forEach(q=>{ qualNameById[q.id]=q.name; });
+  const emps=await getEmployees();
+  const empNameById={};
+  emps.forEach(e=>{ empNameById[e.id]=e.name; });
+  const allData=await fbGet('quals_data')||{};
+
+  const agg={};
+  Object.entries(allData).forEach(([empId,empRec])=>{
+    if(!empRec) return;
+    Object.entries(empRec).forEach(([qualId,rec])=>{
+      if(!rec||!rec.history) return;
+      Object.values(rec.history).forEach(h=>{
+        if(!h||!h.date||h.managerAction) return;
+        if(h.date<startDate||h.date>endDate) return;
+        const type=h.type||'ללא סוג';
+        const key=qualId+'|'+type;
+        if(!agg[key]) agg[key]={qualId,type,count:0,entries:[]};
+        agg[key].count++;
+        agg[key].entries.push({date:h.date,empName:empNameById[empId]||'—'});
+      });
+    });
+  });
+
+  const rows=Object.values(agg).map(a=>{
+    a.entries.sort((x,y)=>x.date<y.date?-1:(x.date>y.date?1:0));
+    return a;
+  }).sort((a,b)=>{
+    const an=qualNameById[a.qualId]||a.qualId, bn=qualNameById[b.qualId]||b.qualId;
+    if(an!==bn) return an<bn?-1:1;
+    return a.type<b.type?-1:1;
+  });
+
+  const card=document.getElementById('weekly-results-card');
+  const tbody=document.getElementById('weekly-results-body');
+  card.style.display='block';
+  document.getElementById('weekly-results-title').textContent='אמצעים שבועי — '+formatDate(startDate)+' עד '+formatDate(endDate);
+
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:#999;padding:1rem;">לא בוצעו כשירויות בטווח זה</td></tr>';
+    return;
+  }
+  tbody.innerHTML=rows.map(a=>{
+    const typeBadge=a.type==='יזום'?'<span class="type-badge">יזום</span>':(a.type==='תרגול'?'<span class="type-badge" style="background:#e0f2fe;color:#0369a1;">תרגול</span>':'<span class="type-badge" style="background:#f3f4f6;color:#666;">'+a.type+'</span>');
+    const daysHtml=a.entries.map(e=>formatDate(e.date)+' ('+dayNameOf(e.date)+') — <b>'+e.empName+'</b>').join('<br>');
+    return '<tr><td style="font-weight:700;">'+(qualNameById[a.qualId]||a.qualId)+'</td>'+
+      '<td>'+typeBadge+'</td>'+
+      '<td><span class="count-pill pill-green" style="background:#ede9fe;color:#5b21b6;">'+a.count+'</span></td>'+
+      '<td style="font-size:12px;">'+daysHtml+'</td></tr>';
+  }).join('');
+};
+window.downloadWeeklyPdf=function(){ window.print(); };
+
 // ===== MESSAGES TO EMPLOYEES (one-time or recurring, in-app) =====
 window.toggleMsgAllEmps=function(){
   const all=document.getElementById('msg-all-emps').checked;
@@ -1907,12 +2021,14 @@ window.renderMasterView=async function(){
     });
     const g=rows.filter(r=>r.status==='green').length;
     const o=rows.filter(r=>r.status==='orange').length;
-    const r=rows.filter(r=>r.status==='red').length;
+    const neverDone=rows.filter(r=>r.status==='red'&&r.isNeverDone).length;
+    const expired=rows.filter(r=>r.status==='red'&&!r.isNeverDone).length;
+    const r=neverDone+expired;
     notifyForRows(rows,emp.name);
     const teamName=emp.team?(teamNameById[emp.team]||'ללא צוות'):'ללא צוות';
     const unavailRecord=unavailability[emp.id];
     const unavailable=isCurrentlyUnavailable(unavailRecord);
-    return{emp,rows,g,o,r,total:rows.length,teamId:emp.team||'',teamName,unavailable,unavailRecord};
+    return{emp,rows,g,o,r,neverDone,expired,total:rows.length,teamId:emp.team||'',teamName,unavailable,unavailRecord};
   });
 
   // Apply team filter
@@ -1931,6 +2047,8 @@ window.renderMasterView=async function(){
   const totalG=empData.reduce((s,d)=>s+d.g,0);
   const totalO=empData.reduce((s,d)=>s+d.o,0);
   const totalR=empData.reduce((s,d)=>s+d.r,0);
+  const totalNeverDone=empData.reduce((s,d)=>s+d.neverDone,0);
+  const totalExpired=empData.reduce((s,d)=>s+d.expired,0);
 
   document.getElementById('stat-employees').textContent=empData.length;
   document.getElementById('stat-green').textContent=totalG;
@@ -1949,7 +2067,8 @@ window.renderMasterView=async function(){
     data:{labels,datasets:[
       {label:'בתוקף',data:empData.map(d=>d.g),backgroundColor:'#38a169',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderSkipped:false},
       {label:'מתקרב',data:empData.map(d=>d.o),backgroundColor:'#e6a817',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderSkipped:false},
-      {label:'פג תוקף',data:empData.map(d=>d.r),backgroundColor:'#e53e3e',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderSkipped:false},
+      {label:'טרם בוצע',data:empData.map(d=>d.neverDone),backgroundColor:'#e53e3e',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderSkipped:false},
+      {label:'פג תוקף',data:empData.map(d=>d.expired),backgroundColor:'#ff1a1a',borderColor:unavailBorders,borderWidth:unavailBorderWidths,borderSkipped:false},
     ]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}},
       scales:{x:{stacked:true,min:0,max:maxTotal,ticks:{stepSize:1,font:{size:10}}},y:{stacked:true,ticks:{font:{size:10},color:(ctx)=>empData[ctx.index]&&empData[ctx.index].unavailable?'#8b5cf6':'#666'}}}}
@@ -1959,7 +2078,7 @@ window.renderMasterView=async function(){
   if(pieChartInst) pieChartInst.destroy();
   pieChartInst=new Chart(document.getElementById('pieChart').getContext('2d'),{
     type:'doughnut',
-    data:{labels:['בתוקף','מתקרב לפקיעה','פג תוקף'],datasets:[{data:[totalG,totalO,totalR],backgroundColor:['#38a169','#e6a817','#e53e3e'],borderWidth:0}]},
+    data:{labels:['בתוקף','מתקרב לפקיעה','טרם בוצע','פג תוקף'],datasets:[{data:[totalG,totalO,totalNeverDone,totalExpired],backgroundColor:['#38a169','#e6a817','#e53e3e','#ff1a1a'],borderWidth:0}]},
     options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}}}
   });
 
