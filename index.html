@@ -127,6 +127,8 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
 .stat-red .stat-value{color:#e53e3e;}
 .stat-unavail{border:2px solid #7c3aed;}
 .stat-unavail .stat-value{color:#7c3aed;}
+.stat-unavail-breakdown{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;}
+.stat-unavail-breakdown span{font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;color:#fff;white-space:nowrap;}
 .master-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1.2rem;}
 @media(min-width:700px){.master-grid{grid-template-columns:1fr 1fr;}}
 .chart-card{background:white;border-radius:12px;padding:1.2rem;box-shadow:0 2px 8px rgba(0,0,0,.06);}
@@ -302,7 +304,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
         <div class="stat-card stat-green"><div class="stat-label">בתוקף</div><div class="stat-value" id="stat-green">0</div><div class="stat-sub">כשירויות</div></div>
         <div class="stat-card stat-orange"><div class="stat-label">מתקרב לפקיעה</div><div class="stat-value" id="stat-orange">0</div><div class="stat-sub">כשירויות</div></div>
         <div class="stat-card stat-red"><div class="stat-label">פג תוקף</div><div class="stat-value" id="stat-red">0</div><div class="stat-sub">כשירויות</div></div>
-        <div class="stat-card stat-unavail"><div class="stat-label">לא זמין</div><div class="stat-value" id="stat-unavail-emps">0</div><div class="stat-sub"><span id="stat-unavail-quals">0</span> כשירויות</div></div>
+        <div class="stat-card stat-unavail"><div class="stat-label">לא זמין</div><div class="stat-value" id="stat-unavail-emps">0</div><div class="stat-sub"><span id="stat-unavail-quals">0</span> כשירויות</div><div class="stat-unavail-breakdown" id="stat-unavail-breakdown"></div></div>
       </div>
       <div class="master-grid">
         <div class="chart-card"><h3>סטטוס כשירויות לפי עובד</h3><div id="barChart-container" style="position:relative;height:220px;width:100%;"><canvas id="barChart"></canvas></div></div>
@@ -2090,6 +2092,15 @@ window.renderMasterView=async function(){
   document.getElementById('stat-red').textContent=totalR;
   document.getElementById('stat-unavail-emps').textContent=unavailEmpCount;
   document.getElementById('stat-unavail-quals').textContent=totalUnavailQuals;
+  // Breakdown of unavailable quals by status
+  const uBreak=[
+    {v:uG,c:'#38a169',l:'בתוקף'},
+    {v:uO,c:'#e6a817',l:'מתקרב'},
+    {v:uNeverDone,c:'#e53e3e',l:'טרם'},
+    {v:uExpired,c:'#ff1a1a',l:'פג'},
+  ];
+  document.getElementById('stat-unavail-breakdown').innerHTML=
+    uBreak.filter(b=>b.v>0).map(b=>'<span style="background:'+b.c+';">'+b.l+' '+b.v+'</span>').join('');
 
   // Bar chart — stacked per employee, labeled with team name for clarity, horizontal for readability
   const labels=empData.map(d=>d.emp.name+(d.teamId?' ('+d.teamName+')':'')+(d.unavailable?' [לא זמין]':''));
