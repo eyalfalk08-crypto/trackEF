@@ -2364,21 +2364,28 @@ window.downloadDetailPdf=async function(){
     const nextDisplay=row.nextDate?formatDate(row.nextDate):'—';
     const lastDisplay=row.lastDate?(formatDate(row.lastDate)+(row.lastType?(' ('+row.lastType+')'):'')):'—';
     const dispClass=displayStatusClass(row);
-    const colorMap={g:'#166534',o:'#92400e',neverDone:'#991b1b',expired:'#991b1b',r:'#991b1b'};
-    const c=colorMap[dispClass]||'#333';
-    return '<tr>'+
+    // Row background + text color per status (soft bg so text stays readable)
+    const styleMap={
+      g:{bg:'#dcfce7',fg:'#166534'},          // בתוקף — ירוק
+      o:{bg:'#fef3c7',fg:'#92400e'},          // מתקרב — כתום
+      neverDone:{bg:'#fee2e2',fg:'#991b1b'},  // טרם בוצע — אדום
+      expired:{bg:'#fee2e2',fg:'#991b1b'},    // פג תוקף — אדום
+      r:{bg:'#fee2e2',fg:'#991b1b'}
+    };
+    const s=styleMap[dispClass]||{bg:'#ffffff',fg:'#333'};
+    return '<tr style="background:'+s.bg+';">'+
       '<td>'+(i+1)+'</td>'+
       '<td class="name">'+row.name+'</td>'+
       '<td>כל '+row.freq+' ימים</td>'+
       '<td>'+lastDisplay+'</td>'+
       '<td>'+nextDisplay+'</td>'+
-      '<td style="color:'+c+';font-weight:700;">'+row.label+'</td>'+
+      '<td style="color:'+s.fg+';font-weight:700;">'+row.label+'</td>'+
       '</tr>';
   }).join('');
 
   const html='<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>'+fileTitle+'</title>'+
     '<style>'+
-    '*{box-sizing:border-box;} body{font-family:"Segoe UI",Arial,sans-serif;color:#1f2937;padding:28px;direction:rtl;}'+
+    '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;} body{font-family:"Segoe UI",Arial,sans-serif;color:#1f2937;padding:28px;direction:rtl;}'+
     '.head{border-bottom:3px solid #4c1d95;padding-bottom:12px;margin-bottom:8px;}'+
     '.head h1{font-size:22px;color:#4c1d95;margin:0 0 4px;}'+
     '.head .date{font-size:13px;color:#6b7280;}'+
@@ -2387,7 +2394,6 @@ window.downloadDetailPdf=async function(){
     'th{background:#4c1d95;color:#fff;padding:8px 6px;text-align:right;font-size:12px;}'+
     'td{padding:7px 6px;border-bottom:1px solid #e5e7eb;text-align:right;}'+
     'td.name{font-weight:600;}'+
-    'tr:nth-child(even) td{background:#faf9fc;}'+
     '.foot{margin-top:22px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:10px;}'+
     '@media print{body{padding:0;} .foot{position:fixed;bottom:0;width:100%;}}'+
     '</style></head><body>'+
