@@ -1531,6 +1531,7 @@ window.generateHistorySummary=async function(){
 
 window.downloadHistoryPdf=function(){
   const title=(document.getElementById('history-summary-title')||{}).textContent||'סיכום היסטוריה';
+  const chartTitle=(document.getElementById('history-chart-title')||{}).textContent||'';
   const thead=(document.getElementById('history-summary-thead')||{}).innerHTML||'';
   const tbodyEl=document.getElementById('history-summary-body');
   if(!tbodyEl || !tbodyEl.children.length){ alert('אין נתונים להורדה — הפק סיכום קודם'); return; }
@@ -1538,23 +1539,32 @@ window.downloadHistoryPdf=function(){
   const safeTitle=title.replace(/[\\/:*?"<>|]/g,'').trim();
   const fileTitle=safeTitle+'_'+today;
 
-  // Rebuild table rows with status colors baked in (so they print reliably) and
-  // without the status-dot markup (which doesn't render well on paper).
+  // Capture the chart (bars with employee names) as an image for the PDF.
+  let chartImg='';
+  try{
+    const canvas=document.getElementById('history-chart');
+    if(canvas && historyChartInst){ chartImg=canvas.toDataURL('image/png',1.0); }
+  }catch(e){ /* if capture fails, PDF still has the table */ }
+
+  // Table rows with status colors baked in.
   const statusStyle={green:{bg:'#dcfce7',fg:'#166534'},orange:{bg:'#fef3c7',fg:'#92400e'},expired:{bg:'#fee2e2',fg:'#991b1b'}};
   let bodyHtml='';
   Array.from(tbodyEl.children).forEach(tr=>{
     const cls=(tr.className.match(/row-(\w+)/)||[])[1];
     const s=statusStyle[cls]||{bg:'#fff',fg:'#333'};
     const cells=Array.from(tr.children).map((td,idx)=>{
-      // last column holds the status badge — take its text and color it
       if(idx===tr.children.length-1){
-        const txt=td.textContent.trim();
-        return '<td style="color:'+s.fg+';font-weight:700;">'+txt+'</td>';
+        return '<td style="color:'+s.fg+';font-weight:700;">'+td.textContent.trim()+'</td>';
       }
       return '<td>'+td.textContent.trim()+'</td>';
     }).join('');
     bodyHtml+='<tr style="background:'+s.bg+';">'+cells+'</tr>';
   });
+
+  const chartBlock=chartImg
+    ? '<div class="chart-wrap">'+(chartTitle?'<div class="chart-title">'+chartTitle+'</div>':'')+
+      '<img src="'+chartImg+'" style="width:100%;max-width:100%;"/></div>'
+    : '';
 
   const html='<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>'+fileTitle+'</title>'+
     '<style>'+
@@ -1562,6 +1572,8 @@ window.downloadHistoryPdf=function(){
     '.head{border-bottom:3px solid #4c1d95;padding-bottom:12px;margin-bottom:8px;}'+
     '.head h1{font-size:20px;color:#4c1d95;margin:0 0 4px;}'+
     '.head .date{font-size:13px;color:#6b7280;}'+
+    '.chart-wrap{margin:18px 0;padding:12px;border:1px solid #e5e7eb;border-radius:10px;}'+
+    '.chart-title{font-size:14px;font-weight:700;color:#4c1d95;margin-bottom:8px;text-align:center;}'+
     'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px;}'+
     'th{background:#4c1d95;color:#fff;padding:8px 6px;text-align:right;font-size:11.5px;}'+
     'td{padding:6px;border-bottom:1px solid #e5e7eb;text-align:right;}'+
@@ -1569,6 +1581,7 @@ window.downloadHistoryPdf=function(){
     '@media print{body{padding:0;}}'+
     '</style></head><body>'+
     '<div class="head"><h1>'+title+'</h1><div class="date">הופק בתאריך: '+today+'</div></div>'+
+    chartBlock+
     '<table><thead>'+thead+'</thead><tbody>'+bodyHtml+'</tbody></table>'+
     '<div class="foot">© כל הזכויות שמורות לאיל פלק · מערכת כשירויות עובדים</div>'+
     '</body></html>';
@@ -1576,7 +1589,7 @@ window.downloadHistoryPdf=function(){
   const w=window.open('','_blank');
   if(!w){ alert('הדפדפן חסם את חלון ההורדה. אפשר חלונות קופצים (pop-ups) לאתר ונסה שוב.'); return; }
   w.document.open(); w.document.write(html); w.document.close();
-  w.onload=function(){ setTimeout(function(){ w.focus(); w.print(); }, 300); };
+  w.onload=function(){ setTimeout(function(){ w.focus(); w.print(); }, 400); };
 };
 
 // ===== TEAMS MANAGER =====
