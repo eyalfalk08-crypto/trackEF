@@ -589,6 +589,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
   <div class="modal-box">
     <button class="modal-close" onclick="closeDetail()">✕</button>
     <h2 id="detail-title">פרטי עובד</h2>
+    <button onclick="downloadDetailPdf()" style="background:#4c1d95;color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:1rem;display:inline-flex;align-items:center;gap:6px;">⬇️ הורד PDF</button>
     <div id="detail-availability" style="display:none;"></div>
     <div class="table-scroll">
       <table>
@@ -2332,6 +2333,80 @@ window.deleteHistoryEntry=async function(empId,qualId,entryKey,empName){
   await window.showDetail(empId,empName);
 };
 window.closeDetail=function(){document.getElementById('detail-modal').classList.remove('open');};
+
+// Build a clean, print-optimized page for the currently-open employee detail and
+// open the print dialog (the user chooses "Save as PDF"). Uses native browser
+// rendering so Hebrew / RTL come out correct. Filename hint = document title.
+window.downloadDetailPdf=async function(){
+  const modal=document.getElementById('detail-modal');
+  const empId=modal.dataset.empId;
+  const empName=modal.dataset.empName||'עובד';
+  if(!empId){ alert('לא נמצא עובד לייצוא'); return; }
+  showLoading(true);
+  const rows=sortByUrgency(await loadEmpQualData(empId));
+  const unavailability=await getUnavailability();
+  const uRec=unavailability[empId];
+  showLoading(false);
+
+  const today=formatDate(todayStr());
+  const safeName=empName.replace(/[\\/:*?"<>|]/g,'').trim();
+  const fileTitle='פירוט_'+safeName+'_'+today;
+
+  // Availability banner (only if currently unavailable)
+  let availHtml='';
+  if(uRec && isCurrentlyUnavailable(uRec)){
+    availHtml='<div class="unavail">🚫 עובד לא זמין — מתאריך '+formatDate(uRec.startDate)+' עד '+formatDate(uRec.endDate)+
+      (uRec.reason?(' · סיבה: '+uRec.reason):'')+'</div>';
+  }
+
+  // Table rows
+  const bodyRows=rows.map((row,i)=>{
+    const nextDisplay=row.nextDate?formatDate(row.nextDate):'—';
+    const lastDisplay=row.lastDate?(formatDate(row.lastDate)+(row.lastType?(' ('+row.lastType+')'):'')):'—';
+    const dispClass=displayStatusClass(row);
+    const colorMap={g:'#166534',o:'#92400e',neverDone:'#991b1b',expired:'#991b1b',r:'#991b1b'};
+    const c=colorMap[dispClass]||'#333';
+    return '<tr>'+
+      '<td>'+(i+1)+'</td>'+
+      '<td class="name">'+row.name+'</td>'+
+      '<td>כל '+row.freq+' ימים</td>'+
+      '<td>'+lastDisplay+'</td>'+
+      '<td>'+nextDisplay+'</td>'+
+      '<td style="color:'+c+';font-weight:700;">'+row.label+'</td>'+
+      '</tr>';
+  }).join('');
+
+  const html='<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>'+fileTitle+'</title>'+
+    '<style>'+
+    '*{box-sizing:border-box;} body{font-family:"Segoe UI",Arial,sans-serif;color:#1f2937;padding:28px;direction:rtl;}'+
+    '.head{border-bottom:3px solid #4c1d95;padding-bottom:12px;margin-bottom:8px;}'+
+    '.head h1{font-size:22px;color:#4c1d95;margin:0 0 4px;}'+
+    '.head .date{font-size:13px;color:#6b7280;}'+
+    '.unavail{background:#ede9fe;border:1px solid #8b5cf6;color:#6b21a8;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;margin:12px 0;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;}'+
+    'th{background:#4c1d95;color:#fff;padding:8px 6px;text-align:right;font-size:12px;}'+
+    'td{padding:7px 6px;border-bottom:1px solid #e5e7eb;text-align:right;}'+
+    'td.name{font-weight:600;}'+
+    'tr:nth-child(even) td{background:#faf9fc;}'+
+    '.foot{margin-top:22px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:10px;}'+
+    '@media print{body{padding:0;} .foot{position:fixed;bottom:0;width:100%;}}'+
+    '</style></head><body>'+
+    '<div class="head"><h1>פירוט כשירויות — '+empName+'</h1>'+
+    '<div class="date">הופק בתאריך: '+today+'</div></div>'+
+    availHtml+
+    '<table><thead><tr><th>#</th><th>שם הכשירות</th><th>תדירות</th><th>ביצוע אחרון</th><th>ביצוע הבא</th><th>סטטוס</th></tr></thead>'+
+    '<tbody>'+bodyRows+'</tbody></table>'+
+    '<div class="foot">© כל הזכויות שמורות לאיל פלק · מערכת כשירויות עובדים</div>'+
+    '</body></html>';
+
+  const w=window.open('','_blank');
+  if(!w){ alert('הדפדפן חסם את חלון ההורדה. אפשר חלונות קופצים (pop-ups) לאתר ונסה שוב.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  // Give it a moment to render, then open the print dialog (user picks "Save as PDF").
+  w.onload=function(){ setTimeout(function(){ w.focus(); w.print(); }, 300); };
+};
 
 </script>
 </body>
