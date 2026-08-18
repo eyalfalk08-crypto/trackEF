@@ -375,6 +375,7 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
       <div class="panel-card">
         <h3>סיכום היסטוריה</h3>
         <p class="panel-sub">הפיקו סיכום חודשי או שנתי של כל הפעולות שנרשמו (לכל העובדים או לעובד ספציפי), או סיכום היסטוריה מלא לעובד ספציפי — ואפשר להוריד כל סיכום כ-PDF.</p>
+        <button class="btn-primary" onclick="downloadHistoryPdf()" style="margin-bottom:1rem;">⬇️ הורד PDF</button>
 
         <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
           <button class="hist-mode-btn active" id="hist-mode-monthly-btn" onclick="setHistoryMode('monthly')">סיכום חודשי — כל העובדים</button>
@@ -426,7 +427,6 @@ tbody td{padding:10px 12px;font-size:13px;vertical-align:middle;}
             </table>
           </div>
         </div>
-        <button class="btn-primary" onclick="downloadHistoryPdf()" style="margin-top:1rem;">הורד PDF</button>
       </div>
     </div>
 
@@ -1527,7 +1527,11 @@ window.generateHistorySummary=async function(){
       });
     }
   }
+  _lastHistoryRows=rows;
 };
+
+// Holds the rows from the last-rendered history summary, for the per-qualification PDF table.
+let _lastHistoryRows=[];
 
 window.downloadHistoryPdf=function(){
   const title=(document.getElementById('history-summary-title')||{}).textContent||'סיכום היסטוריה';
@@ -1566,6 +1570,43 @@ window.downloadHistoryPdf=function(){
       '<img src="'+chartImg+'" style="width:100%;max-width:100%;"/></div>'
     : '';
 
+  // Per-qualification breakdown: for each qualification, list each employee with
+  // how many of their records are בתוקף / קרוב / פג תוקף.
+  let breakdownHtml='';
+  if(_lastHistoryRows && _lastHistoryRows.length){
+    const byQual={};
+    _lastHistoryRows.forEach(r=>{
+      if(!byQual[r.qual]) byQual[r.qual]={};
+      if(!byQual[r.qual][r.emp]) byQual[r.qual][r.emp]={green:0,orange:0,expired:0};
+      if(byQual[r.qual][r.emp][r.tStatus]!==undefined) byQual[r.qual][r.emp][r.tStatus]++;
+    });
+    const qualNames=Object.keys(byQual).sort((a,b)=>a<b?-1:1);
+    breakdownHtml='<h2 class="section">פירוט לפי כשירות ולפי עובד</h2>';
+    qualNames.forEach(qn=>{
+      const emps=Object.keys(byQual[qn]).sort((a,b)=>a<b?-1:1);
+      let tot={green:0,orange:0,expired:0};
+      const empRows=emps.map(en=>{
+        const c=byQual[qn][en];
+        tot.green+=c.green; tot.orange+=c.orange; tot.expired+=c.expired;
+        return '<tr>'+
+          '<td>'+en+'</td>'+
+          '<td style="color:#166534;font-weight:700;text-align:center;">'+c.green+'</td>'+
+          '<td style="color:#92400e;font-weight:700;text-align:center;">'+c.orange+'</td>'+
+          '<td style="color:#991b1b;font-weight:700;text-align:center;">'+c.expired+'</td>'+
+          '</tr>';
+      }).join('');
+      breakdownHtml+='<div class="qual-block">'+
+        '<div class="qual-name">'+qn+'</div>'+
+        '<table class="brk"><thead><tr><th>עובד</th><th>בתוקף</th><th>קרוב</th><th>פג תוקף</th></tr></thead>'+
+        '<tbody>'+empRows+
+        '<tr class="tot"><td>סה"כ</td>'+
+          '<td style="text-align:center;">'+tot.green+'</td>'+
+          '<td style="text-align:center;">'+tot.orange+'</td>'+
+          '<td style="text-align:center;">'+tot.expired+'</td></tr>'+
+        '</tbody></table></div>';
+    });
+  }
+
   const html='<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>'+fileTitle+'</title>'+
     '<style>'+
     '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;} body{font-family:"Segoe UI",Arial,sans-serif;color:#1f2937;padding:28px;direction:rtl;}'+
@@ -1577,12 +1618,20 @@ window.downloadHistoryPdf=function(){
     'table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px;}'+
     'th{background:#4c1d95;color:#fff;padding:8px 6px;text-align:right;font-size:11.5px;}'+
     'td{padding:6px;border-bottom:1px solid #e5e7eb;text-align:right;}'+
+    '.section{font-size:16px;color:#4c1d95;margin:26px 0 6px;border-bottom:2px solid #ede9fe;padding-bottom:6px;}'+
+    '.qual-block{margin-top:14px;break-inside:avoid;}'+
+    '.qual-name{font-size:13.5px;font-weight:800;color:#1f2937;background:#f3f0fb;padding:6px 10px;border-radius:6px;}'+
+    'table.brk{margin-top:4px;}'+
+    'table.brk th{background:#6b21a8;font-size:11px;text-align:center;}'+
+    'table.brk th:first-child{text-align:right;}'+
+    'table.brk tr.tot td{font-weight:800;background:#f9fafb;border-top:2px solid #cbd5e1;}'+
     '.foot{margin-top:22px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:10px;}'+
     '@media print{body{padding:0;}}'+
     '</style></head><body>'+
     '<div class="head"><h1>'+title+'</h1><div class="date">הופק בתאריך: '+today+'</div></div>'+
     chartBlock+
     '<table><thead>'+thead+'</thead><tbody>'+bodyHtml+'</tbody></table>'+
+    breakdownHtml+
     '<div class="foot">© כל הזכויות שמורות לאיל פלק · מערכת כשירויות עובדים</div>'+
     '</body></html>';
 
